@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+
+# Env
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+crash-debug.txt
+crash-log.txt
+crash.txt
+err.txt
+
+# System
+.DS_Store
+
+# Temporary files
+scratch-request.js
+scratch.js
+test-query.js

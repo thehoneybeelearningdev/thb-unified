@@ -1,0 +1,24 @@
+# Node modules
+node_modules/
+
+# Production
+dist/
+build/
+
+# Env
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# System
+.DS_Store
+
+# Misc
+TheHoneyBee-main.zip

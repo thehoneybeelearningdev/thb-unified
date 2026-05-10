@@ -1,0 +1,26 @@
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://web-uvt6.onrender.com/api/:splat"
+  
+  status = 200
+  force = true
+
+# ✅ Handle SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Environment variables for production build
+[context.production.environment]
+  VITE_API_URL = "https://thehoneybeelearning.in"
+  VITE_CLIENT_URL = "https://thehoneybeelearning.in"
+
+# Branch deploys (optional staging env)
+[context.branch-deploy.environment]
+  VITE_API_URL = "https://thehoneybeelearning.in"
+  VITE_CLIENT_URL = "https://thehoneybeelearning.in"

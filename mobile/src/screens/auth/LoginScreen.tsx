@@ -1,0 +1,371 @@
+/**
+ * Login Screen for TheHoneyBee Mobile App.
+ * Premium, WhatsApp-inspired login with Google and email/password auth.
+ */
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  Image, Dimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
+import { useAuth } from '../../context/AuthContext';
+import { COLORS, SPACING, RADIUS, FONT_SIZE, SHADOWS } from '../../theme/theme';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../config/firebase';
+
+const { width } = Dimensions.get('window');
+
+type AuthMode = 'login' | 'register' | 'forgotPassword';
+
+export default function LoginScreen() {
+  const { loginWithEmail, registerWithEmail, loading } = useAuth();
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Toast.show({ type: 'error', text1: 'Please fill all fields' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await loginWithEmail(email.trim().toLowerCase(), password);
+      Toast.show({ type: 'success', text1: 'Logged in successfully!' });
+    } catch (error: any) {
+      const code = error?.code || '';
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        Toast.show({ type: 'error', text1: 'Invalid credentials', text2: 'Email or password is incorrect.' });
+      } else if (code === 'auth/user-not-found') {
+        Toast.show({ type: 'error', text1: 'No account found', text2: 'No account found with this email.' });
+      } else if (code === 'auth/invalid-email') {
+        Toast.show({ type: 'error', text1: 'Invalid email format' });
+      } else {
+        Toast.show({ type: 'error', text1: 'Login failed', text2: error?.message || 'Please try again.' });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      Toast.show({ type: 'error', text1: 'Please fill all fields' });
+      return;
+    }
+    if (password.length < 6) {
+      Toast.show({ type: 'error', text1: 'Password too short', text2: 'Password must be at least 6 characters.' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await registerWithEmail(email.trim().toLowerCase(), password, name.trim());
+      Toast.show({ type: 'success', text1: 'Account created!', text2: 'Welcome to TheHoneyBee!' });
+    } catch (error: any) {
+      const code = error?.code || '';
+      if (code === 'auth/email-already-in-use') {
+        Toast.show({ type: 'error', text1: 'Email already registered', text2: 'Try logging in instead.' });
+      } else {
+        Toast.show({ type: 'error', text1: 'Registration failed', text2: error?.message || 'Please try again.' });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Toast.show({ type: 'error', text1: 'Enter your email address' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      Toast.show({ type: 'success', text1: 'Reset link sent', text2: 'Check your inbox for the reset link.' });
+      setMode('login');
+    } catch {
+      // Always show success to prevent email enumeration
+      Toast.show({ type: 'success', text1: 'Reset link sent', text2: 'If an account exists, a reset link has been sent.' });
+      setMode('login');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const isLoading = loading || submitting;
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header / Branding */}
+        <View style={styles.brandSection}>
+          <Image 
+            source={require('../../../assets/logo.png')} 
+            style={styles.logoImage} 
+            resizeMode="contain" 
+          />
+        </View>
+
+        {/* Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            {mode === 'login' ? 'Welcome Back' :
+             mode === 'register' ? 'Create Account' :
+             'Reset Password'}
+          </Text>
+
+          {mode !== 'forgotPassword' && (
+            <Text style={styles.cardSubtitle}>
+              {mode === 'login' ? (
+                <>
+                  New user?{' '}
+                  <Text style={styles.link} onPress={() => setMode('register')}>Register Now</Text>
+                </>
+              ) : (
+                <>
+                  Already have an account?{' '}
+                  <Text style={styles.link} onPress={() => setMode('login')}>Log in</Text>
+                </>
+              )}
+            </Text>
+          )}
+
+          {mode === 'forgotPassword' && (
+            <Text style={styles.cardSubtitle}>
+              Enter your email to receive a password reset link.
+            </Text>
+          )}
+
+          {/* Registration name field */}
+          {mode === 'register' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Your name"
+                placeholderTextColor={COLORS.textTertiary}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+            </View>
+          )}
+
+          {/* Email */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="email@example.com"
+              placeholderTextColor={COLORS.textTertiary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          {/* Password (not for forgot password) */}
+          {mode !== 'forgotPassword' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter password"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(v => !v)}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={20}
+                    color={COLORS.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Forgot password link */}
+          {mode === 'login' && (
+            <TouchableOpacity
+              onPress={() => setMode('forgotPassword')}
+              style={styles.forgotContainer}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Submit button */}
+          <TouchableOpacity
+            style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+            onPress={
+              mode === 'login' ? handleLogin :
+              mode === 'register' ? handleRegister :
+              handleForgotPassword
+            }
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <ActivityIndicator color={COLORS.textInverse} />
+            ) : (
+              <Text style={styles.submitButtonText}>
+                {mode === 'login' ? 'Sign In' :
+                 mode === 'register' ? 'Sign Up' :
+                 'Send Reset Link'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Back to login from forgot password */}
+          {mode === 'forgotPassword' && (
+            <TouchableOpacity
+              onPress={() => setMode('login')}
+              style={styles.backToLoginContainer}
+            >
+              <Text style={styles.backToLoginText}>← Back to Login</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xxxl,
+  },
+  brandSection: {
+    alignItems: 'center',
+    marginBottom: SPACING.xxxl,
+  },
+  logoImage: {
+    width: width * 0.8,
+    height: 120,
+    marginBottom: SPACING.md,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xxl,
+    ...SHADOWS.lg,
+  },
+  cardTitle: {
+    fontSize: FONT_SIZE.xxl,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+  cardSubtitle: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xl,
+  },
+  link: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  inputGroup: {
+    marginBottom: SPACING.lg,
+  },
+  label: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '500',
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    backgroundColor: COLORS.background,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.background,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+  },
+  eyeButton: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  forgotContainer: {
+    alignItems: 'flex-end',
+    marginBottom: SPACING.lg,
+    marginTop: -SPACING.sm,
+  },
+  forgotText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  submitButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.sm,
+    ...SHADOWS.md,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '600',
+    color: COLORS.textInverse,
+  },
+  backToLoginContainer: {
+    alignItems: 'center',
+    marginTop: SPACING.lg,
+  },
+  backToLoginText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+});

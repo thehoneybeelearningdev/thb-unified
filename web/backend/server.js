@@ -1217,103 +1217,111 @@ async function resolveUserEmailAndRole(userId) {
   return null;
 }
 
+const attachedChatListeners = new Set();
+const attachedBatchListeners = new Set();
+
 function startChatNotificationListeners() {
   console.log('[ChatNotify] Starting chat notification listeners...');
+  const serverStartTime = Date.now();
 
-  // --- Private chats ---
+  // Attach a message listener for a single private chat
+  function attachChatListener(chatDoc) {
+    const chatId = chatDoc.id;
+    if (attachedChatListeners.has(chatId)) return;
+    attachedChatListeners.add(chatId);
+
+    adminDb.collection('chats').doc(chatId).collection('messages')
+      .onSnapshot((msgSnap) => {
+        msgSnap.docChanges().forEach(async (msgChange) => {
+          if (msgChange.type !== 'added') return;
+          const msg = msgChange.doc.data();
+
+          if (msg.deletedForEveryone || !msg.senderId || !msg.timestamp) return;
+          const msgTime = msg.timestamp?.toDate?.()?.getTime() || 0;
+          // Skip messages that existed before the server started
+          if (msgTime < serverStartTime) return;
+
+          const chatData = chatDoc.data();
+          const users = Array.isArray(chatData.users) ? chatData.users : [];
+
+          for (const userId of users) {
+            if (userId === msg.senderId || userId === 'admin') continue;
+            try {
+              const userInfo = await resolveUserEmailAndRole(userId);
+              if (!userInfo?.email) continue;
+
+              const senderName = msg.senderName || 'Someone';
+              const previewText = msg.text
+                || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
+
+              await sendPushToUser(
+                userInfo.email, userInfo.role,
+                senderName, previewText,
+                { chatId, type: 'private_message' }
+              );
+            } catch { /* ignore per-user errors */ }
+          }
+        });
+      }, (err) => console.error(`[ChatNotify] Chat ${chatId} msg listener error:`, err.message));
+  }
+
+  // Attach a message listener for a single batch
+  function attachBatchListener(batchDoc) {
+    const batchId = batchDoc.id;
+    if (attachedBatchListeners.has(batchId)) return;
+    attachedBatchListeners.add(batchId);
+
+    adminDb.collection('batches').doc(batchId).collection('messages')
+      .onSnapshot((msgSnap) => {
+        msgSnap.docChanges().forEach(async (msgChange) => {
+          if (msgChange.type !== 'added') return;
+          const msg = msgChange.doc.data();
+
+          if (msg.deletedForEveryone || !msg.senderId || !msg.timestamp) return;
+          const msgTime = msg.timestamp?.toDate?.()?.getTime() || 0;
+          if (msgTime < serverStartTime) return;
+
+          const batchData = batchDoc.data();
+          const studentIds = Array.isArray(batchData.students) ? batchData.students : [];
+
+          for (const studentId of studentIds) {
+            if (studentId === msg.senderId) continue;
+            try {
+              const userInfo = await resolveUserEmailAndRole(studentId)
+                || { email: studentId.includes('@') ? studentId : null, role: 'student' };
+              if (!userInfo?.email) continue;
+
+              const senderName = msg.senderName || 'Teacher';
+              const previewText = msg.text
+                || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
+
+              await sendPushToUser(
+                userInfo.email, userInfo.role,
+                `${batchData.batchName || 'Batch'}: ${senderName}`,
+                previewText,
+                { batchId, type: 'batch_message' }
+              );
+            } catch { /* ignore per-student errors */ }
+          }
+        });
+      }, (err) => console.error(`[ChatNotify] Batch ${batchId} msg listener error:`, err.message));
+  }
+
+  // Watch ALL chats (existing + new)
   adminDb.collection('chats').onSnapshot((chatsSnap) => {
-    chatsSnap.docChanges().forEach((change) => {
-      if (change.type !== 'added') return;
-      const chatId = change.doc.id;
-
-      // Watch messages subcollection for new messages
-      adminDb.collection('chats').doc(chatId).collection('messages')
-        .onSnapshot((msgSnap) => {
-          msgSnap.docChanges().forEach(async (msgChange) => {
-            if (msgChange.type !== 'added') return;
-            const msg = msgChange.doc.data();
-
-            // Skip deleted, system, old messages (older than 30 seconds)
-            if (msg.deletedForEveryone || !msg.senderId || !msg.timestamp) return;
-            const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-            if (Date.now() - msgTime.getTime() > 30000) return;
-
-            const chatData = change.doc.data();
-            const users = Array.isArray(chatData.users) ? chatData.users : [];
-
-            // Notify all users except the sender
-            for (const userId of users) {
-              if (userId === msg.senderId || userId === 'admin') continue;
-              try {
-                const userInfo = await resolveUserEmailAndRole(userId);
-                if (!userInfo?.email) continue;
-
-                const senderName = msg.senderName || 'Someone';
-                const previewText = msg.deletedForEveryone
-                  ? '🚫 This message was deleted'
-                  : msg.text || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
-
-                await sendPushToUser(
-                  userInfo.email,
-                  userInfo.role,
-                  senderName,
-                  previewText,
-                  { chatId, type: 'private_message' }
-                );
-              } catch { /* ignore per-user errors */ }
-            }
-          });
-        }, (err) => console.error(`[ChatNotify] Error on chat ${chatId}:`, err.message));
-    });
+    chatsSnap.docs.forEach(attachChatListener);
   }, (err) => console.error('[ChatNotify] chats onSnapshot error:', err.message));
 
-  // --- Batch chats ---
+  // Watch ALL batches (existing + new)
   adminDb.collection('batches').onSnapshot((batchSnap) => {
-    batchSnap.docChanges().forEach((change) => {
-      if (change.type !== 'added') return;
-      const batchId = change.doc.id;
-
-      adminDb.collection('batches').doc(batchId).collection('messages')
-        .onSnapshot((msgSnap) => {
-          msgSnap.docChanges().forEach(async (msgChange) => {
-            if (msgChange.type !== 'added') return;
-            const msg = msgChange.doc.data();
-
-            if (msg.deletedForEveryone || !msg.senderId || !msg.timestamp) return;
-            const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-            if (Date.now() - msgTime.getTime() > 30000) return;
-
-            const batchData = change.doc.data();
-            const studentIds = Array.isArray(batchData.students) ? batchData.students : [];
-
-            for (const studentId of studentIds) {
-              if (studentId === msg.senderId) continue;
-              try {
-                // studentId may be email or doc ID
-                const userInfo = await resolveUserEmailAndRole(studentId) || { email: studentId.includes('@') ? studentId : null, role: 'student' };
-                if (!userInfo?.email) continue;
-
-                const senderName = msg.senderName || 'Teacher';
-                const previewText = msg.text || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
-
-                await sendPushToUser(
-                  userInfo.email,
-                  userInfo.role,
-                  `${batchData.batchName || 'Batch'}: ${senderName}`,
-                  previewText,
-                  { batchId, type: 'batch_message' }
-                );
-              } catch { /* ignore per-student errors */ }
-            }
-          });
-        }, (err) => console.error(`[ChatNotify] Error on batch ${batchId}:`, err.message));
-    });
+    batchSnap.docs.forEach(attachBatchListener);
   }, (err) => console.error('[ChatNotify] batches onSnapshot error:', err.message));
 
   console.log('[ChatNotify] Listeners started.');
 }
 
 startChatNotificationListeners();
+
 
 // Global Error Handler
 app.use((err, req, res, next) => {

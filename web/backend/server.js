@@ -1155,6 +1155,166 @@ function startZoomAutomation() {
 // Start automation when server starts
 startZoomAutomation();
 
+// ===========================================
+// Real-time Chat Push Notifications
+// Watches Firestore for new messages and sends
+// push notifications to offline recipients.
+// ===========================================
+
+async function sendPushToUser(email, role, title, body, data = {}) {
+  try {
+    let collectionName = 'Students';
+    if (role === 'admin') collectionName = 'Admin';
+    else if (role === 'teacher') collectionName = 'Teacher';
+
+    // Try Gmail field first, then email field
+    let userSnap = await adminDb.collection(collectionName).where('Gmail', '==', email).limit(1).get();
+    if (userSnap.empty) {
+      userSnap = await adminDb.collection(collectionName).where('email', '==', email).limit(1).get();
+    }
+    if (userSnap.empty) return;
+
+    const userData = userSnap.docs[0].data();
+    const pushTokens = Array.isArray(userData.pushTokens) ? userData.pushTokens : [];
+    if (pushTokens.length === 0) return;
+
+    const messages = pushTokens
+      .filter(t => Expo.isExpoPushToken(t))
+      .map(to => ({ to, sound: 'default', title, body, data }));
+
+    if (messages.length === 0) return;
+
+    const chunks = expo.chunkPushNotifications(messages);
+    for (const chunk of chunks) {
+      try {
+        await expo.sendPushNotificationsAsync(chunk);
+      } catch (err) {
+        console.error('[ChatNotify] Error sending chunk:', err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[ChatNotify] sendPushToUser error:', err.message);
+  }
+}
+
+async function resolveUserEmailAndRole(userId) {
+  // Try to find user across collections by UID
+  const collections = [
+    { name: 'Admin', role: 'admin' },
+    { name: 'Teacher', role: 'teacher' },
+    { name: 'Students', role: 'student' },
+  ];
+  for (const { name, role } of collections) {
+    try {
+      const snap = await adminDb.collection(name).where('uid', '==', userId).limit(1).get();
+      if (!snap.empty) {
+        const d = snap.docs[0].data();
+        const email = (d.Gmail || d.email || '').toLowerCase();
+        return { email, role };
+      }
+    } catch { /* continue */ }
+  }
+  return null;
+}
+
+function startChatNotificationListeners() {
+  console.log('[ChatNotify] Starting chat notification listeners...');
+
+  // --- Private chats ---
+  adminDb.collection('chats').onSnapshot((chatsSnap) => {
+    chatsSnap.docChanges().forEach((change) => {
+      if (change.type !== 'added') return;
+      const chatId = change.doc.id;
+
+      // Watch messages subcollection for new messages
+      adminDb.collection('chats').doc(chatId).collection('messages')
+        .onSnapshot((msgSnap) => {
+          msgSnap.docChanges().forEach(async (msgChange) => {
+            if (msgChange.type !== 'added') return;
+            const msg = msgChange.doc.data();
+
+            // Skip deleted, system, old messages (older than 30 seconds)
+            if (msg.deletedForEveryone || !msg.senderId || !msg.timestamp) return;
+            const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+            if (Date.now() - msgTime.getTime() > 30000) return;
+
+            const chatData = change.doc.data();
+            const users = Array.isArray(chatData.users) ? chatData.users : [];
+
+            // Notify all users except the sender
+            for (const userId of users) {
+              if (userId === msg.senderId || userId === 'admin') continue;
+              try {
+                const userInfo = await resolveUserEmailAndRole(userId);
+                if (!userInfo?.email) continue;
+
+                const senderName = msg.senderName || 'Someone';
+                const previewText = msg.deletedForEveryone
+                  ? '🚫 This message was deleted'
+                  : msg.text || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
+
+                await sendPushToUser(
+                  userInfo.email,
+                  userInfo.role,
+                  senderName,
+                  previewText,
+                  { chatId, type: 'private_message' }
+                );
+              } catch { /* ignore per-user errors */ }
+            }
+          });
+        }, (err) => console.error(`[ChatNotify] Error on chat ${chatId}:`, err.message));
+    });
+  }, (err) => console.error('[ChatNotify] chats onSnapshot error:', err.message));
+
+  // --- Batch chats ---
+  adminDb.collection('batches').onSnapshot((batchSnap) => {
+    batchSnap.docChanges().forEach((change) => {
+      if (change.type !== 'added') return;
+      const batchId = change.doc.id;
+
+      adminDb.collection('batches').doc(batchId).collection('messages')
+        .onSnapshot((msgSnap) => {
+          msgSnap.docChanges().forEach(async (msgChange) => {
+            if (msgChange.type !== 'added') return;
+            const msg = msgChange.doc.data();
+
+            if (msg.deletedForEveryone || !msg.senderId || !msg.timestamp) return;
+            const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+            if (Date.now() - msgTime.getTime() > 30000) return;
+
+            const batchData = change.doc.data();
+            const studentIds = Array.isArray(batchData.students) ? batchData.students : [];
+
+            for (const studentId of studentIds) {
+              if (studentId === msg.senderId) continue;
+              try {
+                // studentId may be email or doc ID
+                const userInfo = await resolveUserEmailAndRole(studentId) || { email: studentId.includes('@') ? studentId : null, role: 'student' };
+                if (!userInfo?.email) continue;
+
+                const senderName = msg.senderName || 'Teacher';
+                const previewText = msg.text || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
+
+                await sendPushToUser(
+                  userInfo.email,
+                  userInfo.role,
+                  `${batchData.batchName || 'Batch'}: ${senderName}`,
+                  previewText,
+                  { batchId, type: 'batch_message' }
+                );
+              } catch { /* ignore per-student errors */ }
+            }
+          });
+        }, (err) => console.error(`[ChatNotify] Error on batch ${batchId}:`, err.message));
+    });
+  }, (err) => console.error('[ChatNotify] batches onSnapshot error:', err.message));
+
+  console.log('[ChatNotify] Listeners started.');
+}
+
+startChatNotificationListeners();
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });

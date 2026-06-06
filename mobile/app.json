@@ -2,7 +2,7 @@
   "expo": {
     "name": "The Honeybee Learning",
     "slug": "the-honeybee-learning",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon_new.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.thehoneybee.learning",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "buildNumber": "2"
     },
     "android": {
       "newArchEnabled": false,
@@ -24,7 +25,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "googleServicesFile": "./google-services.json",
-      "package": "com.thehoneybee.learning"
+      "package": "com.thehoneybee.learning",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/icon_new.png"

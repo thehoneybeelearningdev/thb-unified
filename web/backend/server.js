@@ -827,29 +827,48 @@ app.post('/api/users/push-token', verifyAuth, async (req, res) => {
   try {
     const { pushToken } = req.body;
     const email = req.user.email?.toLowerCase();
+    const uid = req.user.uid;
 
     if (!pushToken || !email) {
       return res.status(400).json({ error: 'Missing push token or email' });
     }
 
-    // Determine role/collection
-    let collectionName = 'Students';
-    if (req.userRole === 'admin') collectionName = 'Admin';
-    else if (req.userRole === 'teacher') collectionName = 'Teacher';
+    // Search across all collections to find the user
+    const collectionsToSearch = ['Admin', 'Teacher', 'Students'];
+    let docRef = null;
 
-    const userSnap = await adminDb.collection(collectionName).where('Gmail', '==', email).limit(1).get();
-
-    if (userSnap.empty) {
-      return res.status(404).json({ error: 'User not found in collection' });
+    for (const collectionName of collectionsToSearch) {
+      // Try by Gmail field
+      let userSnap = await adminDb.collection(collectionName).where('Gmail', '==', email).limit(1).get();
+      if (userSnap.empty) {
+        // Also try by email field
+        userSnap = await adminDb.collection(collectionName).where('email', '==', email).limit(1).get();
+      }
+      if (userSnap.empty && uid) {
+        // Also try by uid field
+        userSnap = await adminDb.collection(collectionName).where('uid', '==', uid).limit(1).get();
+      }
+      if (!userSnap.empty) {
+        docRef = userSnap.docs[0].ref;
+        // Also store the uid on the document if it's missing (needed for chat notification lookup)
+        const userData = userSnap.docs[0].data();
+        if (uid && !userData.uid) {
+          await docRef.update({ uid });
+        }
+        break;
+      }
     }
 
-    const docRef = userSnap.docs[0].ref;
+    if (!docRef) {
+      return res.status(404).json({ error: 'User not found in any collection' });
+    }
 
     // Use Firestore arrayUnion to store multiple tokens (e.g., if user has phone & tablet)
     await docRef.update({
       pushTokens: admin.firestore.FieldValue.arrayUnion(pushToken)
     });
 
+    console.log(`[PushToken] Saved push token for ${email}`);
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving push token:', error);
@@ -1198,7 +1217,7 @@ async function sendPushToUser(email, role, title, body, data = {}) {
 }
 
 async function resolveUserEmailAndRole(userId) {
-  // Try to find user across collections by UID
+  // Try to find user across collections by UID field, document ID, or email
   const collections = [
     { name: 'Admin', role: 'admin' },
     { name: 'Teacher', role: 'teacher' },
@@ -1206,11 +1225,30 @@ async function resolveUserEmailAndRole(userId) {
   ];
   for (const { name, role } of collections) {
     try {
+      // 1. Try by uid field
       const snap = await adminDb.collection(name).where('uid', '==', userId).limit(1).get();
       if (!snap.empty) {
         const d = snap.docs[0].data();
         const email = (d.Gmail || d.email || '').toLowerCase();
         return { email, role };
+      }
+      // 2. Try by document ID
+      const docSnap = await adminDb.collection(name).doc(userId).get();
+      if (docSnap.exists) {
+        const d = docSnap.data();
+        const email = (d.Gmail || d.email || '').toLowerCase();
+        return { email, role };
+      }
+      // 3. If userId looks like an email, try by Gmail/email field
+      if (userId.includes('@')) {
+        const emailSnap = await adminDb.collection(name).where('Gmail', '==', userId.toLowerCase()).limit(1).get();
+        if (!emailSnap.empty) {
+          return { email: userId.toLowerCase(), role };
+        }
+        const emailSnap2 = await adminDb.collection(name).where('email', '==', userId.toLowerCase()).limit(1).get();
+        if (!emailSnap2.empty) {
+          return { email: userId.toLowerCase(), role };
+        }
       }
     } catch { /* continue */ }
   }

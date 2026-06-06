@@ -4,7 +4,7 @@
  * role determination from Firestore, and session management.
  */
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { Logger } from '../utils/logger';
@@ -33,6 +33,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string, name: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,9 +42,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * Determine user role by checking Admin, Teacher, Students Firestore collections.
  * Mirrors backend's getUserRoleAndName logic.
  */
-async function getUserRoleAndName(email: string, nameFromAuth?: string): Promise<{ role: UserRole; name: string; status?: string }> {
+async function getUserRoleAndName(email: string, nameFromAuth?: string, firebaseUid?: string): Promise<{ role: UserRole; name: string; status?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
   Logger.debug(TAG, `Resolving role for: ${normalizedEmail}`);
+
+  // Helper: ensure the uid field is set on the Firestore document
+  const ensureUid = async (collectionName: string, docId: string, existingData: any) => {
+    if (firebaseUid && !existingData.uid) {
+      try {
+        const { updateDoc, doc: firestoreDoc } = await import('firebase/firestore');
+        await updateDoc(firestoreDoc(db, collectionName, docId), { uid: firebaseUid });
+        Logger.info(TAG, `Stored uid ${firebaseUid} on ${collectionName}/${docId}`);
+      } catch (e) {
+        Logger.warn(TAG, `Could not store uid on ${collectionName}/${docId}`, e);
+      }
+    }
+  };
 
   try {
     // 1. Check Admin collection
@@ -51,6 +65,7 @@ async function getUserRoleAndName(email: string, nameFromAuth?: string): Promise
     if (!adminSnap.empty) {
       const data = adminSnap.docs[0].data();
       const name = data.name || normalizedEmail.split('@')[0];
+      await ensureUid('Admin', adminSnap.docs[0].id, data);
       Logger.info(TAG, `Role resolved: Admin (${name})`);
       return { role: 'Admin', name };
     }
@@ -60,6 +75,7 @@ async function getUserRoleAndName(email: string, nameFromAuth?: string): Promise
     if (!teacherSnap.empty) {
       const data = teacherSnap.docs[0].data();
       const name = data.name || normalizedEmail.split('@')[0];
+      await ensureUid('Teacher', teacherSnap.docs[0].id, data);
       Logger.info(TAG, `Role resolved: Teacher (${name})`);
       return { role: 'Teacher', name };
     }
@@ -69,6 +85,7 @@ async function getUserRoleAndName(email: string, nameFromAuth?: string): Promise
     if (!studentSnap.empty) {
       const data = studentSnap.docs[0].data();
       const name = data.name || normalizedEmail.split('@')[0];
+      await ensureUid('Students', studentSnap.docs[0].id, data);
       Logger.info(TAG, `Role resolved: Student (${name})`);
       return { role: 'Student', name, status: data.status || 'inactive' };
     }
@@ -80,6 +97,7 @@ async function getUserRoleAndName(email: string, nameFromAuth?: string): Promise
       Gmail: normalizedEmail,
       email: normalizedEmail,
       name: newName,
+      uid: firebaseUid || '',
       role: 'student',
       status: 'active',
       createdAt: new Date(),
@@ -107,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         Logger.warn(TAG, 'User has no email, cannot resolve role');
         return;
       }
-      const { role, name, status } = await getUserRoleAndName(email, firebaseUser.displayName || undefined);
+      const { role, name, status } = await getUserRoleAndName(email, firebaseUser.displayName || undefined, firebaseUser.uid);
       setUserRole(role);
       setUserName(name);
       setUserStatus(status || null);
@@ -210,6 +228,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [resolveRole]);
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    Logger.info(TAG, 'Attempting Google login via credential');
+    setLoading(true);
+    try {
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+      
+      // Register with backend for session
+      try {
+        await fetch(`${require('../config/env').ENV.API_URL}/api/auth/google-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
+      } catch (e) {
+        Logger.warn(TAG, 'Backend session creation failed for Google', e);
+      }
+      
+      await resolveRole(userCredential.user);
+    } catch (error) {
+      Logger.error(TAG, 'Google login error', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [resolveRole]);
+
+
   const logout = useCallback(async () => {
     Logger.info(TAG, 'Logging out');
     setLoading(true);
@@ -241,6 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshUser,
         loginWithEmail,
         registerWithEmail,
+        loginWithGoogle,
       }}
     >
       {children}

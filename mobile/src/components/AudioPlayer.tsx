@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { Audio } from '../utils/expoAvMock';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
@@ -118,7 +118,7 @@ export default function AudioPlayer({ fileUrl, duration = 0, isSent = false }: P
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: localUri },
         { shouldPlay: true },
-        (status) => {
+        (status: any) => {
           if (status.isLoaded) {
             setPosition(status.positionMillis);
             if (status.durationMillis) {

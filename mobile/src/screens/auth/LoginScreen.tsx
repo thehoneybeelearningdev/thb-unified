@@ -12,21 +12,50 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, SPACING, RADIUS, FONT_SIZE, SHADOWS } from '../../theme/theme';
-import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../config/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
+
+// Configure Google Sign-In (web client ID is required for Firebase)
+GoogleSignin.configure({
+  webClientId: '509238464463-tnvut4occp8r32nm8qg1koc7o7a7qgmg.apps.googleusercontent.com',
+  offlineAccess: false,
+});
 
 const { width } = Dimensions.get('window');
 
 type AuthMode = 'login' | 'register' | 'forgotPassword';
 
 export default function LoginScreen() {
-  const { loginWithEmail, registerWithEmail, loading } = useAuth();
+  const { loginWithEmail, registerWithEmail, loginWithGoogle, loading } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setSubmitting(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const result = await GoogleSignin.signIn();
+      if (!isSuccessResponse(result)) {
+        Toast.show({ type: 'info', text1: 'Google Sign-In cancelled' });
+        return;
+      }
+      const { idToken } = result.data;
+      if (!idToken) throw new Error('No ID token returned from Google');
+      await loginWithGoogle(idToken);
+      Toast.show({ type: 'success', text1: 'Logged in with Google!' });
+    } catch (error: any) {
+      if (error.code !== 'SIGN_IN_CANCELLED') {
+        Toast.show({ type: 'error', text1: 'Google Login failed', text2: error?.message || 'Please try again.' });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -111,10 +140,10 @@ export default function LoginScreen() {
       >
         {/* Header / Branding */}
         <View style={styles.brandSection}>
-          <Image 
-            source={require('../../../assets/logo.png')} 
-            style={styles.logoImage} 
-            resizeMode="contain" 
+          <Image
+            source={require('../../../assets/thb-with-bg.jpeg')}
+            style={styles.logoImage}
+            resizeMode="contain"
           />
         </View>
 
@@ -122,8 +151,8 @@ export default function LoginScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
             {mode === 'login' ? 'Welcome Back' :
-             mode === 'register' ? 'Create Account' :
-             'Reset Password'}
+              mode === 'register' ? 'Create Account' :
+                'Reset Password'}
           </Text>
 
           {mode !== 'forgotPassword' && (
@@ -221,8 +250,8 @@ export default function LoginScreen() {
             style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
             onPress={
               mode === 'login' ? handleLogin :
-              mode === 'register' ? handleRegister :
-              handleForgotPassword
+                mode === 'register' ? handleRegister :
+                  handleForgotPassword
             }
             disabled={isLoading}
             activeOpacity={0.8}
@@ -232,11 +261,32 @@ export default function LoginScreen() {
             ) : (
               <Text style={styles.submitButtonText}>
                 {mode === 'login' ? 'Sign In' :
-                 mode === 'register' ? 'Sign Up' :
-                 'Send Reset Link'}
+                  mode === 'register' ? 'Sign Up' :
+                    'Send Reset Link'}
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Google Sign-In button */}
+          {mode === 'login' && (
+            <>
+              <View style={styles.dividerContainer}>
+                <View style={styles.divider} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.divider} />
+              </View>
+
+              <TouchableOpacity
+                style={styles.googleButton}
+                onPress={handleGoogleLogin}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="logo-google" size={20} color={COLORS.text} style={styles.googleIcon} />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
           {/* Back to login from forgot password */}
           {mode === 'forgotPassword' && (
@@ -367,5 +417,39 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: COLORS.primary,
     fontWeight: '500',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: SPACING.lg,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    marginHorizontal: SPACING.md,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleIcon: {
+    marginRight: SPACING.sm,
+  },
+  googleButtonText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });

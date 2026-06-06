@@ -4,30 +4,48 @@
     "slug": "the-honeybee-learning",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/logo.png",
+    "icon": "./assets/icon_new.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/logo.png",
+      "image": "./assets/icon_new.png",
       "resizeMode": "contain",
       "backgroundColor": "#E6F4FE"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.thehoneybee.learning"
+      "bundleIdentifier": "com.thehoneybee.learning",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
+      "newArchEnabled": false,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/logo.png"
+        "foregroundImage": "./assets/icon_new.png"
       },
       "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
       "package": "com.thehoneybee.learning"
     },
     "web": {
-      "favicon": "./assets/logo.png"
+      "favicon": "./assets/icon_new.png"
     },
     "plugins": [
-      "expo-sharing"
-    ]
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon_new.png",
+          "color": "#127D8E"
+        }
+      ],
+      "@react-native-google-signin/google-signin",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f7565ca6-7a6b-4b9d-b5ad-5790baac1292"
+      }
+    },
+    "owner": "thehoneybee"
   }
 }

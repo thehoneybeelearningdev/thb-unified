@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,7 @@ import MessageAttachment from '../../components/MessageAttachment';
 import ChatInputBar from '../../components/ChatInputBar';
 import MessageActionSheet from '../../components/MessageActionSheet';
 import Toast from 'react-native-toast-message';
+import { MessagesShimmer } from '../../components/ShimmerPlaceholder';
 
 const TAG = 'PrivateChat';
 
@@ -102,6 +103,11 @@ export default function PrivateChatScreen({ route, navigation }: any) {
     const unsubscribe = subscribeToMessages(chatId, (msgs) => {
       setMessages(msgs);
       setLoading(false);
+      
+      // Mark messages as read dynamically when inside the chat
+      if (currentUser?.uid) {
+        markChatAsRead(chatId, currentUser.uid);
+      }
     }, currentUser?.uid);
 
     // Mark as read when entering
@@ -349,8 +355,8 @@ export default function PrivateChatScreen({ route, navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={styles.container}>
+        <MessagesShimmer />
       </View>
     );
   }

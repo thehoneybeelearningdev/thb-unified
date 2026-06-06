@@ -9,7 +9,7 @@ import {
   ActivityIndicator, Dimensions, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode } from '../utils/expoAvMock';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
 import { fileService } from '../services/fileService';
 import ImageViewerModal from './ImageViewerModal';
@@ -309,7 +309,7 @@ function VideoInlinePlayer({
         resizeMode={ResizeMode.CONTAIN}
         shouldPlay
         onReadyForDisplay={() => setVideoReady(true)}
-        onError={(err) => {
+        onError={(err: any) => {
           Logger.error('VideoPlayer', 'Video playback error', err);
           setVideoError(true);
         }}

@@ -16,10 +16,13 @@ import { setupLocalNotifications } from './src/utils/localNotifications';
 
 Logger.info('App', 'TheHoneyBee Mobile App starting...');
 
-// Initialize local notification channel & permissions
-setupLocalNotifications();
-
 export default function App() {
+  React.useEffect(() => {
+    // Initialize local notification channel & permissions inside useEffect
+    // to ensure the native activity is fully ready.
+    setupLocalNotifications();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ErrorBoundary>

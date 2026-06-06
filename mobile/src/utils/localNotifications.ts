@@ -27,14 +27,12 @@ export async function setupLocalNotifications() {
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#127D8E',
-        sound: 'default',
       });
     }
 
     // Allow notifications to show when app is in foreground
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
         shouldShowBanner: true,
@@ -73,7 +71,6 @@ export async function showMessageNotification(
         title: senderName,
         body: messagePreview,
         data: { chatId, chatName },
-        sound: 'default',
         ...(Platform.OS === 'android' ? { channelId: 'messages' } : {}),
       },
       trigger: null, // Show immediately

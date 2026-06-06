@@ -8,7 +8,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
   PanResponder, Dimensions, Vibration,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { Audio } from '../utils/expoAvMock';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
 import { Logger } from '../utils/logger';

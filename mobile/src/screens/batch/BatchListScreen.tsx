@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -14,9 +14,10 @@ import {
   collection, query, where, onSnapshot, getDocs, doc, getDoc,
   Unsubscribe
 } from 'firebase/firestore';
-import { subscribeToUnreadCount } from '../../utils/chatUtils';
+import { subscribeToUnreadCount, markBatchAsRead } from '../../utils/chatUtils';
 import { COLORS, SPACING, RADIUS, FONT_SIZE, SHADOWS } from '../../theme/theme';
 import { Logger } from '../../utils/logger';
+import { BatchListShimmer } from '../../components/ShimmerPlaceholder';
 
 const TAG = 'BatchList';
 
@@ -151,7 +152,11 @@ export default function BatchListScreen({ navigation }: any) {
       });
 
       setBatches(visible);
-      setLoading(false);
+      if (visible.length > 0) {
+        setLoading(false);
+      } else {
+        setTimeout(() => setLoading(false), 800);
+      }
     });
 
     return () => unsub();
@@ -171,6 +176,10 @@ export default function BatchListScreen({ navigation }: any) {
   }, [currentUser?.uid, batches.length]);
 
   const handleBatchPress = (batch: any) => {
+    if (currentUser?.uid) {
+      markBatchAsRead(batch.id, currentUser.uid);
+    }
+    
     navigation.navigate('BatchChat', {
       batchId: batch.id,
       batchName: batch.batchName || 'Batch',
@@ -230,12 +239,7 @@ export default function BatchListScreen({ navigation }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading batches...</Text>
-      </View>
-    );
+    return <BatchListShimmer />;
   }
 
   return (

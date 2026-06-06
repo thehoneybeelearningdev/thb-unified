@@ -5,13 +5,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import {
-  subscribeToBatchMessages, sendBatchMessage,
+  subscribeToBatchMessages, sendBatchMessage, markBatchAsRead,
   sendBatchFileMessage, sendBatchVoiceMessage, sendBatchImageMessage,
 } from '../../utils/chatUtils';
 import { fileService } from '../../services/fileService';
@@ -23,6 +23,7 @@ import MessageAttachment from '../../components/MessageAttachment';
 import ChatInputBar from '../../components/ChatInputBar';
 import MessageActionSheet from '../../components/MessageActionSheet';
 import Toast from 'react-native-toast-message';
+import { MessagesShimmer } from '../../components/ShimmerPlaceholder';
 
 const TAG = 'BatchChat';
 
@@ -85,7 +86,18 @@ export default function BatchChatScreen({ route, navigation }: any) {
     const unsub = subscribeToBatchMessages(batchId, (msgs) => {
       setMessages(msgs);
       setLoading(false);
+      
+      // Mark as read dynamically when inside the batch chat
+      if (currentUser?.uid) {
+        markBatchAsRead(batchId, currentUser.uid);
+      }
     }, currentUser?.uid);
+
+    // Mark as read when entering
+    if (currentUser?.uid) {
+      markBatchAsRead(batchId, currentUser.uid);
+    }
+
     return () => unsub();
   }, [batchId, currentUser?.uid]);
 
@@ -322,9 +334,8 @@ export default function BatchChatScreen({ route, navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading messages...</Text>
+      <View style={styles.container}>
+        <MessagesShimmer />
       </View>
     );
   }
@@ -332,8 +343,8 @@ export default function BatchChatScreen({ route, navigation }: any) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
     >
       {/* Batch Info Banner — Tappable to open BatchDetail */}
       <TouchableOpacity

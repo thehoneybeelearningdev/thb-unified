@@ -18,6 +18,7 @@ import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../../theme/theme';
 import { CommunityChannel } from './CommunityHubScreen';
 import Toast from 'react-native-toast-message';
 import { Logger } from '../../utils/logger';
+import { MessagesShimmer } from '../../components/ShimmerPlaceholder';
 
 const TAG = 'ChannelChat';
 
@@ -125,9 +126,8 @@ export default function AnnouncementsScreen({ route, navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading announcements...</Text>
+      <View style={styles.container}>
+        <MessagesShimmer count={5} />
       </View>
     );
   }
@@ -135,8 +135,8 @@ export default function AnnouncementsScreen({ route, navigation }: any) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
     >
       <FlatList
         ref={flatListRef}

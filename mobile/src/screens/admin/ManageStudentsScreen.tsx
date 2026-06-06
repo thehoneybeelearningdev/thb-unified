@@ -12,6 +12,7 @@ import { COLORS, SPACING, RADIUS, FONT_SIZE, SHADOWS } from '../../theme/theme';
 import { Logger } from '../../utils/logger';
 import Toast from 'react-native-toast-message';
 import { apiClient } from '../../services/apiClient';
+import { StudentListShimmer } from '../../components/ShimmerPlaceholder';
 
 const TAG = 'ManageStudents';
 
@@ -41,6 +42,7 @@ export default function ManageStudentsScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [toggling, setToggling] = useState<string | null>(null);
   const [analyticsModal, setAnalyticsModal] = useState<StudentAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -63,6 +65,11 @@ export default function ManageStudentsScreen({ navigation }: any) {
   // Filter & search
   useEffect(() => {
     let result = students;
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(s => statusFilter === 'active' ? s.isActive !== false : s.isActive === false);
+    }
+    // Payment filter
     if (filter !== 'all') {
       result = result.filter(s => s.paymentStatus === filter);
     }
@@ -75,7 +82,7 @@ export default function ManageStudentsScreen({ navigation }: any) {
       );
     }
     setFilteredStudents(result);
-  }, [students, filter, searchQuery]);
+  }, [students, filter, statusFilter, searchQuery]);
 
   const togglePayment = (student: Student) => {
     const newStatus = student.paymentStatus === 'paid' ? 'unpaid' : 'paid';
@@ -122,6 +129,8 @@ export default function ManageStudentsScreen({ navigation }: any) {
 
   const paidCount = students.filter(s => s.paymentStatus === 'paid').length;
   const unpaidCount = students.filter(s => s.paymentStatus === 'unpaid').length;
+  const activeCount = students.filter(s => s.isActive !== false).length;
+  const inactiveCount = students.filter(s => s.isActive === false).length;
 
   const renderStudent = ({ item }: { item: Student }) => {
     const isPaid = item.paymentStatus === 'paid';
@@ -163,12 +172,7 @@ export default function ManageStudentsScreen({ navigation }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading students...</Text>
-      </View>
-    );
+    return <StudentListShimmer />;
   }
 
   return (
@@ -206,7 +210,7 @@ export default function ManageStudentsScreen({ navigation }: any) {
         ) : null}
       </View>
 
-      {/* Filter Chips */}
+      {/* Filter Chips — Payment */}
       <View style={styles.filterRow}>
         {(['all', 'paid', 'unpaid'] as const).map(f => (
           <TouchableOpacity
@@ -215,7 +219,22 @@ export default function ManageStudentsScreen({ navigation }: any) {
             onPress={() => setFilter(f)}
           >
             <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'all' ? 'All' : f === 'paid' ? `✓ Paid (${paidCount})` : `✗ Unpaid (${unpaidCount})`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Filter Chips — Status */}
+      <View style={styles.filterRow}>
+        {(['all', 'active', 'inactive'] as const).map(f => (
+          <TouchableOpacity
+            key={f}
+            style={[styles.filterChip, statusFilter === f && (f === 'inactive' ? styles.filterChipInactive : styles.filterChipActive)]}
+            onPress={() => setStatusFilter(f)}
+          >
+            <Text style={[styles.filterChipText, statusFilter === f && styles.filterChipTextActive]}>
+              {f === 'all' ? 'All Status' : f === 'active' ? `Active (${activeCount})` : `Inactive (${inactiveCount})`}
             </Text>
           </TouchableOpacity>
         ))}
@@ -354,6 +373,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface, marginRight: SPACING.sm,
   },
   filterChipActive: { backgroundColor: COLORS.primary },
+  filterChipInactive: { backgroundColor: '#e67e22' },
   filterChipText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, fontWeight: '500' },
   filterChipTextActive: { color: COLORS.textInverse },
   listContainer: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.xxxl },

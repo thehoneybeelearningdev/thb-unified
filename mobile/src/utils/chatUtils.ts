@@ -575,6 +575,39 @@ export async function markChatAsRead(chatId: string, userId: string): Promise<vo
 }
 
 /**
+ * Mark messages as read for a user in a batch.
+ */
+export async function markBatchAsRead(batchId: string, userId: string): Promise<void> {
+  try {
+    const messagesQuery = query(
+      collection(db, 'batches', batchId, 'messages'),
+      where('senderId', '!=', userId)
+    );
+    const snapshot = await getDocs(messagesQuery);
+    const batch = writeBatch(db);
+    let updateCount = 0;
+
+    snapshot.docs.forEach(msgDoc => {
+      const data = msgDoc.data();
+      const readBy = data.readBy || [];
+      if (!readBy.includes(userId)) {
+        batch.update(msgDoc.ref, {
+          readBy: [...readBy, userId],
+        });
+        updateCount++;
+      }
+    });
+
+    if (updateCount > 0) {
+      await batch.commit();
+      Logger.debug(TAG, `Marked ${updateCount} messages as read in batch ${batchId}`);
+    }
+  } catch (error) {
+    Logger.error(TAG, 'Error marking batch as read', error);
+  }
+}
+
+/**
  * Subscribe to unread count for a specific chat.
  */
 export function subscribeToUnreadCount(
@@ -670,6 +703,13 @@ export async function deleteMessageForEveryone(
       mimeType: '',
       fileSize: 0,
     });
+    
+    // Update the last message preview to show it was deleted
+    const parentRef = doc(db, isBatchChat ? 'batches' : 'chats', chatId);
+    await setDoc(parentRef, {
+      lastMessage: '🚫 This message was deleted',
+    }, { merge: true });
+
     Logger.info(TAG, `Message ${messageId} deleted for everyone`);
   } catch (error) {
     Logger.error(TAG, 'Error deleting message for everyone', error);

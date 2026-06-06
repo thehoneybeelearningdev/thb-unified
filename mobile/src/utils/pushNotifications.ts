@@ -46,15 +46,14 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
 
       const projectId =
         Constants?.expoConfig?.extra?.eas?.projectId ??
-        Constants?.easConfig?.projectId;
+        Constants?.easConfig?.projectId ??
+        'f7565ca6-7a6b-4b9d-b5ad-5790baac1292'; // EAS project ID fallback for bare workflow
         
       if (!projectId) {
         Logger.warn(TAG, 'Project ID not found in app config. Ensure EAS is configured for production builds.');
       }
       
-      const pushTokenObject = await Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined
-      );
+      const pushTokenObject = await Notifications.getExpoPushTokenAsync({ projectId });
       token = pushTokenObject.data;
       Logger.info(TAG, `Expo Push Token generated: ${token}`);
     } else {

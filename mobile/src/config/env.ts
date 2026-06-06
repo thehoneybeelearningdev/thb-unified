@@ -2,7 +2,7 @@
  * Environment configuration for TheHoneyBee Mobile App.
  *
  * DEV  → local backend via LAN IP (auto-detected from Expo dev server)
- * PROD → deployed backend (https://web-uvt6.onrender.com)
+ * PROD → deployed backend (https://thb-unified.onrender.com)
  *
  * Toggle by __DEV__ (auto-set by React Native / Expo):
  *   - `npx expo start`          → __DEV__ = true  → dev URLs
@@ -13,7 +13,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const PROD_API_URL = 'https://web-uvt6.onrender.com';
+const PROD_API_URL = 'https://thb-unified.onrender.com';
 const DEV_PORT = '5001';
 
 /**
@@ -48,8 +48,8 @@ export const ENV = {
   FIREBASE_PROJECT_ID: 'chatapp-629ad',
   FIREBASE_STORAGE_BUCKET: 'chatapp-629ad.firebasestorage.app',
 
-  // Server route — switches based on environment
-  API_URL: __DEV__ ? getDevApiUrl() : PROD_API_URL,
+  // Server route — forced to Render for mobile development
+  API_URL: PROD_API_URL,
 
   CLIENT_URL: __DEV__
     ? 'http://localhost:3000'

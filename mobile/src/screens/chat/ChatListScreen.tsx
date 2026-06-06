@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator, RefreshControl, AppState,
+  TextInput, RefreshControl, AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -15,6 +15,7 @@ import { Logger } from '../../utils/logger';
 import { Unsubscribe, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { showMessageNotification } from '../../utils/localNotifications';
+import { ChatListShimmer } from '../../components/ShimmerPlaceholder';
 
 const TAG = 'ChatList';
 
@@ -38,7 +39,12 @@ export default function ChatListScreen({ navigation }: any) {
       userRole,
       (userChats) => {
         setChats(userChats);
-        setLoading(false);
+        if (userChats.length > 0) {
+          setLoading(false);
+        } else {
+          // Delay dropping the shimmer to give server fetch a chance if local cache was empty
+          setTimeout(() => setLoading(false), 800);
+        }
         setRefreshing(false);
       }
     );
@@ -50,17 +56,27 @@ export default function ChatListScreen({ navigation }: any) {
   useEffect(() => {
     if (!currentUser?.uid || chats.length === 0) return;
 
+    // Track which chats have completed their initial load
+    const initializedChats = new Set<string>();
+
     const unsubs: Unsubscribe[] = [];
     chats.forEach(chat => {
       const unsub = subscribeToUnreadCount(chat.id, currentUser.uid, true, (count) => {
         setUnreadCounts(prev => {
-          const prevCount = prev[chat.id] || 0;
-          // If unread count increased, show a local notification
-          if (count > prevCount && prevCount >= 0) {
+          const prevCount = prev[chat.id] ?? -1;
+
+          // Only show a notification if:
+          // 1. This chat has already been initialized (not first load)
+          // 2. The count genuinely increased
+          if (initializedChats.has(chat.id) && count > (prevCount === -1 ? 0 : prevCount)) {
             const chatDisplayName = chat.name || chat.chatName || 'New Message';
             const preview = chat.lastMessage || 'You have a new message';
             showMessageNotification(chatDisplayName, preview, chat.id, chatDisplayName);
           }
+
+          // Mark this chat as initialized after first callback
+          initializedChats.add(chat.id);
+
           return { ...prev, [chat.id]: count };
         });
       });
@@ -69,6 +85,7 @@ export default function ChatListScreen({ navigation }: any) {
 
     return () => { unsubs.forEach(u => u()); };
   }, [chats, currentUser?.uid]);
+
 
   // Fetch payment status for private chat participants (for overdue badges)
   useEffect(() => {
@@ -188,12 +205,7 @@ export default function ChatListScreen({ navigation }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading chats...</Text>
-      </View>
-    );
+    return <ChatListShimmer />;
   }
 
   return (

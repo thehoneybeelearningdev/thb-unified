@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "509238464463",
+    "project_id": "chatapp-629ad",
+    "storage_bucket": "chatapp-629ad.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:509238464463:android:2c1b34f74b8142dffdccba",
+        "android_client_info": {
+          "package_name": "com.thehoneybee.learning"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "509238464463-r20s6hcqinlhuvff32tfjkoob50f3idh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.thehoneybee.learning",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "509238464463-tnvut4occp8r32nm8qg1koc7o7a7qgmg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD70EtINOXX4eAOeQAlBPhQsPD8NKikodY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "509238464463-h38pbfo14ak8gh2b019v7o7cd27u6fhl.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

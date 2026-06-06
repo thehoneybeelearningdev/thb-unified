@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, ScrollView,
+  RefreshControl, ScrollView, TextInput,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { COLORS, SPACING, RADIUS, FONT_SIZE, SHADOWS } from '../../theme/theme';
 import { Logger } from '../../utils/logger';
 import { apiClient } from '../../services/apiClient';
 import Toast from 'react-native-toast-message';
+import { ReportsListShimmer } from '../../components/ShimmerPlaceholder';
 import { getDocs, collection, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
@@ -47,6 +48,7 @@ export default function ReportsHubScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'daily' | 'weekly' | 'private'>('all');
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -86,21 +88,36 @@ export default function ReportsHubScreen({ navigation }: any) {
     }, [fetchReports])
   );
 
-  const filteredReports = filter === 'all'
-    ? reports
-    : filter === 'private'
-      ? reports.filter(r => r.classType === 'private')
-      : reports.filter(r => r.reportType === filter);
-
-  const dailyCount = reports.filter(r => r.reportType === 'daily').length;
-  const weeklyCount = reports.filter(r => r.reportType === 'weekly').length;
-  const privateCount = reports.filter(r => r.classType === 'private').length;
-
   const formatDate = (dateStr: string | null): string => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   };
+
+  const filteredReports = (() => {
+    let result = filter === 'all'
+      ? reports
+      : filter === 'private'
+        ? reports.filter(r => r.classType === 'private')
+        : reports.filter(r => r.reportType === filter);
+
+    // Apply search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(r =>
+        (r.teacherName || '').toLowerCase().includes(q) ||
+        (r.batchName || '').toLowerCase().includes(q) ||
+        (r.className || '').toLowerCase().includes(q) ||
+        (r.reportDate || '').toLowerCase().includes(q) ||
+        (r.createdAt ? formatDate(r.createdAt).toLowerCase().includes(q) : false)
+      );
+    }
+    return result;
+  })();
+
+  const dailyCount = reports.filter(r => r.reportType === 'daily').length;
+  const weeklyCount = reports.filter(r => r.reportType === 'weekly').length;
+  const privateCount = reports.filter(r => r.classType === 'private').length;
 
   const mapStudentNames = (ids?: string[]) => {
     if (!ids || ids.length === 0) return 'None';
@@ -197,12 +214,7 @@ export default function ReportsHubScreen({ navigation }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading reports...</Text>
-      </View>
-    );
+    return <ReportsListShimmer />;
   }
 
   return (
@@ -264,6 +276,23 @@ export default function ReportsHubScreen({ navigation }: any) {
         ))}
       </ScrollView>
 
+      {/* Search Bar */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color={COLORS.textTertiary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by date, class, teacher..."
+          placeholderTextColor={COLORS.textTertiary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery ? (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
       {/* Reports List */}
       <FlatList
         data={filteredReports}
@@ -304,8 +333,8 @@ const styles = StyleSheet.create({
   statDivider: { borderLeftWidth: 1, borderLeftColor: COLORS.borderLight },
   statNumber: { fontSize: FONT_SIZE.xxl, fontWeight: '700', color: COLORS.text },
   statLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 2 },
-  filterScroll: { flexGrow: 0 },
-  filterRow: { flexDirection: 'row', paddingHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.xs },
+  filterScroll: { flexGrow: 0, marginTop: SPACING.md, marginBottom: SPACING.xs, minHeight: 45 },
+  filterRow: { flexDirection: 'row', paddingHorizontal: SPACING.md, paddingVertical: 4, alignItems: 'center' },
   filterChip: {
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, borderRadius: RADIUS.full,
     backgroundColor: COLORS.surface, marginRight: SPACING.sm,
@@ -314,6 +343,12 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, fontWeight: '500' },
   filterChipTextActive: { color: COLORS.textInverse },
   listContainer: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.xxxl },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm, paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.lg, height: 44,
+  },
+  searchInput: { flex: 1, marginLeft: SPACING.sm, fontSize: FONT_SIZE.md, color: COLORS.text },
   reportCard: {
     backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.md,
     marginTop: SPACING.sm, ...SHADOWS.sm,

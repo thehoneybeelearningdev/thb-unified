@@ -11,6 +11,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONT_SIZE } from '../theme/theme';
@@ -191,6 +192,7 @@ function getTabIcon(routeName: string, focused: boolean): keyof typeof Ionicons.
 function MainTabs() {
   const { userRole } = useAuth();
   const role = (userRole || 'student').toLowerCase();
+  const insets = useSafeAreaInsets();
 
   return (
     <>
@@ -204,8 +206,8 @@ function MainTabs() {
           borderTopWidth: 0.5,
           borderTopColor: COLORS.border,
           paddingTop: 4,
-          paddingBottom: 6,
-          height: 58,
+          paddingBottom: Math.max(insets.bottom, 6),
+          height: 58 + Math.max(insets.bottom - 6, 0),
         },
         tabBarLabelStyle: { fontSize: FONT_SIZE.xs, fontWeight: '500' },
         tabBarIcon: ({ focused, color }) => (
@@ -213,9 +215,8 @@ function MainTabs() {
         ),
       })}
     >
-      <Tab.Screen name="ChatsTab" component={ChatStackNavigator} options={{ tabBarLabel: 'Chats' }} />
-
       <Tab.Screen name="BatchesTab" component={BatchStackNavigator} options={{ tabBarLabel: 'Batches' }} />
+      <Tab.Screen name="ChatsTab" component={ChatStackNavigator} options={{ tabBarLabel: 'Chats' }} />
 
       {/* Admin specific tab */}
       {role === 'admin' && (

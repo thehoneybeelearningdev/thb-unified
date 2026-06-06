@@ -3,19 +3,18 @@
  * Tap to start, shows live timer + waveform, swipe left to cancel,
  * pause/resume, delete, and send.
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
-  PanResponder, Dimensions, Vibration, ActivityIndicator
+  Dimensions, Vibration, ActivityIndicator
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
 import { Logger } from '../utils/logger';
 
 const TAG = 'VoiceRecorder';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CANCEL_THRESHOLD = -100;
 
 interface Props {
   onSend: (uri: string, duration: number) => Promise<void>;
@@ -23,19 +22,19 @@ interface Props {
 }
 
 export default function VoiceRecorder({ onSend, onCancel }: Props) {
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isPaused, setIsPaused] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [isCancelling, setIsCancelling] = useState(false);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const state = useAudioRecorderState(recorder);
+  
   const [isSending, setIsSending] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const slideX = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const lockOpacity = useRef(new Animated.Value(1)).current;
+
+  const isRecordingActive = state.isRecording;
+  const isPaused = !state.isRecording && state.durationMillis > 0;
+  const durationSec = Math.floor(state.durationMillis / 1000);
 
   // Pulse animation for recording indicator
   useEffect(() => {
-    if (!isPaused && recording && !isSending) {
+    if (isRecordingActive && !isSending) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.3, duration: 500, useNativeDriver: true }),
@@ -47,59 +46,32 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
     } else {
       pulseAnim.setValue(1);
     }
-  }, [isPaused, recording, isSending]);
+  }, [isRecordingActive, isSending]);
 
   // Start recording on mount
   useEffect(() => {
     startRecording();
     return () => {
-      cleanup();
+      recorder.stop().catch(() => {});
     };
   }, []);
 
-  // Timer
-  useEffect(() => {
-    if (recording && !isPaused && !isSending) {
-      timerRef.current = setInterval(() => {
-        setDuration(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [recording, isPaused, isSending]);
-
-  const cleanup = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-  };
-
   const startRecording = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
+      const { status } = await requestRecordingPermissionsAsync();
       if (status !== 'granted') {
         Logger.error(TAG, 'Audio permission denied');
         onCancel();
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(newRecording);
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       Vibration.vibrate(50);
       Logger.info(TAG, 'Recording started');
     } catch (error) {
@@ -108,15 +80,13 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
     }
   };
 
-  const handlePause = async () => {
-    if (!recording || isSending) return;
+  const handlePause = () => {
+    if (isSending) return;
     try {
       if (isPaused) {
-        await recording.startAsync();
-        setIsPaused(false);
+        recorder.record();
       } else {
-        await recording.pauseAsync();
-        setIsPaused(true);
+        recorder.pause();
       }
     } catch (error) {
       Logger.error(TAG, 'Error pausing/resuming', error);
@@ -124,17 +94,14 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
   };
 
   const handleSend = async () => {
-    if (!recording || isSending) return;
+    if (isSending) return;
     setIsSending(true);
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+      await recorder.stop();
+      const uri = recorder.uri;
       if (uri) {
-        // Wait for onSend to finish uploading
-        await onSend(uri, duration);
+        await onSend(uri, durationSec);
       }
-      setRecording(null);
-      cleanup();
     } catch (error) {
       Logger.error(TAG, 'Error sending recording', error);
       onCancel();

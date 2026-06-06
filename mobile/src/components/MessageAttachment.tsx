@@ -9,7 +9,7 @@ import {
   ActivityIndicator, Dimensions, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
 import { fileService } from '../services/fileService';
 import ImageViewerModal from './ImageViewerModal';
@@ -248,8 +248,11 @@ function VideoInlinePlayer({
 }) {
   const [playing, setPlaying] = useState(false);
   const [videoError, setVideoError] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
   const { localUri, loading, error } = useAuthMedia(playing ? downloadUrl : undefined);
+
+  const player = useVideoPlayer(localUri || '', player => {
+    player.play();
+  });
 
   if (videoError || error) {
     return (
@@ -297,22 +300,12 @@ function VideoInlinePlayer({
 
   return (
     <View style={videoStyles.playerContainer}>
-      {!videoReady && (
-        <View style={videoStyles.loadingOverlay}>
-          <ActivityIndicator size="small" color="#fff" />
-        </View>
-      )}
-      <Video
-        source={{ uri: localUri }}
+      <VideoView
         style={videoStyles.player}
-        useNativeControls
-        resizeMode={ResizeMode.CONTAIN}
-        shouldPlay
-        onReadyForDisplay={() => setVideoReady(true)}
-        onError={(err: any) => {
-          Logger.error('VideoPlayer', 'Video playback error', err);
-          setVideoError(true);
-        }}
+        player={player}
+        allowsFullscreen
+        allowsPictureInPicture
+        nativeControls
       />
     </View>
   );

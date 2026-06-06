@@ -6,12 +6,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
 import { Logger } from '../utils/logger';
 import { auth } from '../config/firebase';
+
 const TAG = 'AudioPlayer';
 
 interface Props {
@@ -22,16 +23,16 @@ interface Props {
 
 const WAVEFORM_BARS = 28;
 
-let activeSound: Audio.Sound | null = null;
-let activePauseCallback: (() => void) | null = null;
-
 export default function AudioPlayer({ fileUrl, duration = 0, isSent = false }: Props) {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [totalDuration, setTotalDuration] = useState(duration * 1000);
+  const [localUri, setLocalUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  
+  const player = useAudioPlayer(localUri || '');
+  const status = useAudioPlayerStatus(player);
+
+  const isPlaying = status.playing;
+  const position = status.currentTime * 1000;
+  const totalDuration = status.duration * 1000 || duration * 1000;
 
   // Generate consistent random waveform bars based on URL hash
   const waveformBars = useRef(
@@ -41,18 +42,6 @@ export default function AudioPlayer({ fileUrl, duration = 0, isSent = false }: P
     })
   ).current;
 
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        if (activeSound === sound) {
-          activeSound = null;
-          activePauseCallback = null;
-        }
-        sound.unloadAsync().catch(() => {});
-      }
-    };
-  }, [sound]);
-
   const formatDuration = (ms: number): string => {
     const totalSec = Math.floor(ms / 1000);
     const min = Math.floor(totalSec / 60);
@@ -61,50 +50,25 @@ export default function AudioPlayer({ fileUrl, duration = 0, isSent = false }: P
   };
 
   const loadAndPlay = useCallback(async () => {
+    if (isPlaying) {
+      player.pause();
+      return;
+    }
+
+    if (localUri) {
+      if (status.currentTime >= status.duration - 0.1) {
+        player.seekTo(0);
+      }
+      player.play();
+      return;
+    }
+
     try {
-      // Stop previously playing audio if it's not this one
-      if (activeSound && activeSound !== sound && activePauseCallback) {
-        activePauseCallback();
-      }
-
-      if (sound) {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          if (status.isPlaying) {
-            await sound.pauseAsync();
-            setIsPlaying(false);
-            if (activeSound === sound) {
-              activeSound = null;
-              activePauseCallback = null;
-            }
-          } else {
-            // If at the end, replay
-            if (status.positionMillis >= (status.durationMillis || 0) - 100) {
-              await sound.setPositionAsync(0);
-            }
-            await sound.playAsync();
-            setIsPlaying(true);
-            activeSound = sound;
-            activePauseCallback = () => {
-              sound.pauseAsync().catch(() => {});
-              setIsPlaying(false);
-            };
-          }
-          return;
-        }
-      }
-
       setIsLoading(true);
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
-
-      // Download the audio file with auth headers to local cache first
       const { downloadWithAuth } = await import('../utils/useAuthMedia');
-      const localUri = await downloadWithAuth(fileUrl);
+      const uri = await downloadWithAuth(fileUrl);
       
-      if (!localUri) {
+      if (!uri) {
         Toast.show({
           type: 'error',
           text1: 'Audio Not Found',
@@ -115,41 +79,8 @@ export default function AudioPlayer({ fileUrl, duration = 0, isSent = false }: P
         return;
       }
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: localUri },
-        { shouldPlay: true },
-        (status: any) => {
-          if (status.isLoaded) {
-            setPosition(status.positionMillis);
-            if (status.durationMillis) {
-              setTotalDuration(status.durationMillis);
-            }
-            const dur = status.durationMillis || totalDuration || 1;
-            const progress = dur > 0 ? status.positionMillis / dur : 0;
-            progressAnim.setValue(progress);
-
-            if (status.didJustFinish) {
-              setIsPlaying(false);
-              progressAnim.setValue(0);
-              setPosition(0);
-              if (activeSound === newSound) {
-                activeSound = null;
-                activePauseCallback = null;
-              }
-            }
-          }
-        }
-      );
-
-      setSound(newSound);
-      setIsPlaying(true);
-      setIsLoading(false);
-      
-      activeSound = newSound;
-      activePauseCallback = () => {
-        newSound.pauseAsync().catch(() => {});
-        setIsPlaying(false);
-      };
+      setLocalUri(uri);
+      // Playing is handled in a useEffect below once localUri is set
     } catch (error) {
       Logger.error(TAG, 'Error playing audio', error);
       setIsLoading(false);
@@ -160,7 +91,14 @@ export default function AudioPlayer({ fileUrl, duration = 0, isSent = false }: P
         visibilityTime: 4000,
       });
     }
-  }, [sound, fileUrl, totalDuration]);
+  }, [isPlaying, localUri, player, status.currentTime, status.duration, fileUrl]);
+
+  useEffect(() => {
+    if (localUri && isLoading) {
+      setIsLoading(false);
+      player.play();
+    }
+  }, [localUri, isLoading, player]);
 
   const progress = totalDuration > 0 ? position / totalDuration : 0;
   const displayDuration = isPlaying || position > 0

@@ -1191,22 +1191,37 @@ async function sendPushToUser(email, role, title, body, data = {}) {
     if (userSnap.empty) {
       userSnap = await adminDb.collection(collectionName).where('email', '==', email).limit(1).get();
     }
-    if (userSnap.empty) return;
+    if (userSnap.empty) {
+      console.log(`[ChatNotify] No user found for ${email} in ${collectionName}`);
+      return;
+    }
 
     const userData = userSnap.docs[0].data();
     const pushTokens = Array.isArray(userData.pushTokens) ? userData.pushTokens : [];
-    if (pushTokens.length === 0) return;
+    if (pushTokens.length === 0) {
+      console.log(`[ChatNotify] User ${email} has no push tokens registered`);
+      return;
+    }
 
     const messages = pushTokens
-      .filter(t => Expo.isExpoPushToken(t))
+      .filter(t => {
+        const valid = Expo.isExpoPushToken(t);
+        if (!valid) console.log(`[ChatNotify] Invalid Expo push token: ${t}`);
+        return valid;
+      })
       .map(to => ({ to, sound: 'default', title, body, data }));
 
-    if (messages.length === 0) return;
+    if (messages.length === 0) {
+      console.log(`[ChatNotify] No valid Expo tokens for ${email}`);
+      return;
+    }
 
+    console.log(`[ChatNotify] Sending ${messages.length} push notification(s) to ${email}: "${title}" — "${body}"`);
     const chunks = expo.chunkPushNotifications(messages);
     for (const chunk of chunks) {
       try {
-        await expo.sendPushNotificationsAsync(chunk);
+        const tickets = await expo.sendPushNotificationsAsync(chunk);
+        console.log(`[ChatNotify] Push tickets for ${email}:`, JSON.stringify(tickets));
       } catch (err) {
         console.error('[ChatNotify] Error sending chunk:', err.message);
       }
@@ -1279,14 +1294,22 @@ function startChatNotificationListeners() {
           // Skip messages that existed before the server started
           if (msgTime < serverStartTime) return;
 
-          const chatData = chatDoc.data();
+          // Re-fetch the latest chat data (don't use stale chatDoc)
+          const freshChatSnap = await adminDb.collection('chats').doc(chatId).get();
+          if (!freshChatSnap.exists) return;
+          const chatData = freshChatSnap.data();
           const users = Array.isArray(chatData.users) ? chatData.users : [];
+
+          console.log(`[ChatNotify] New message in chat ${chatId} from ${msg.senderId}. Participants: ${users.join(', ')}`);
 
           for (const userId of users) {
             if (userId === msg.senderId || userId === 'admin') continue;
             try {
               const userInfo = await resolveUserEmailAndRole(userId);
-              if (!userInfo?.email) continue;
+              if (!userInfo?.email) {
+                console.log(`[ChatNotify] Could not resolve user: ${userId}`);
+                continue;
+              }
 
               const senderName = msg.senderName || 'Someone';
               const previewText = msg.text
@@ -1297,7 +1320,9 @@ function startChatNotificationListeners() {
                 senderName, previewText,
                 { chatId, type: 'private_message' }
               );
-            } catch { /* ignore per-user errors */ }
+            } catch (e) {
+              console.error(`[ChatNotify] Error notifying user ${userId}:`, e.message);
+            }
           }
         });
       }, (err) => console.error(`[ChatNotify] Chat ${chatId} msg listener error:`, err.message));
@@ -1319,15 +1344,30 @@ function startChatNotificationListeners() {
           const msgTime = msg.timestamp?.toDate?.()?.getTime() || 0;
           if (msgTime < serverStartTime) return;
 
-          const batchData = batchDoc.data();
+          // Re-fetch latest batch data
+          const freshBatchSnap = await adminDb.collection('batches').doc(batchId).get();
+          if (!freshBatchSnap.exists) return;
+          const batchData = freshBatchSnap.data();
           const studentIds = Array.isArray(batchData.students) ? batchData.students : [];
+          const teacherId = batchData.teacher || batchData.teacherId || '';
 
-          for (const studentId of studentIds) {
-            if (studentId === msg.senderId) continue;
+          // Include teacher in notification recipients
+          const allRecipients = [...studentIds];
+          if (teacherId && !allRecipients.includes(teacherId)) {
+            allRecipients.push(teacherId);
+          }
+
+          console.log(`[ChatNotify] New message in batch ${batchId} (${batchData.batchName}) from ${msg.senderId}. Recipients: ${allRecipients.length}`);
+
+          for (const recipientId of allRecipients) {
+            if (recipientId === msg.senderId) continue;
             try {
-              const userInfo = await resolveUserEmailAndRole(studentId)
-                || { email: studentId.includes('@') ? studentId : null, role: 'student' };
-              if (!userInfo?.email) continue;
+              const userInfo = await resolveUserEmailAndRole(recipientId)
+                || { email: recipientId.includes('@') ? recipientId : null, role: 'student' };
+              if (!userInfo?.email) {
+                console.log(`[ChatNotify] Could not resolve batch user: ${recipientId}`);
+                continue;
+              }
 
               const senderName = msg.senderName || 'Teacher';
               const previewText = msg.text
@@ -1339,7 +1379,9 @@ function startChatNotificationListeners() {
                 previewText,
                 { batchId, type: 'batch_message' }
               );
-            } catch { /* ignore per-student errors */ }
+            } catch (e) {
+              console.error(`[ChatNotify] Error notifying batch user ${recipientId}:`, e.message);
+            }
           }
         });
       }, (err) => console.error(`[ChatNotify] Batch ${batchId} msg listener error:`, err.message));
@@ -1347,11 +1389,13 @@ function startChatNotificationListeners() {
 
   // Watch ALL chats (existing + new)
   adminDb.collection('chats').onSnapshot((chatsSnap) => {
+    console.log(`[ChatNotify] Watching ${chatsSnap.docs.length} private chats`);
     chatsSnap.docs.forEach(attachChatListener);
   }, (err) => console.error('[ChatNotify] chats onSnapshot error:', err.message));
 
   // Watch ALL batches (existing + new)
   adminDb.collection('batches').onSnapshot((batchSnap) => {
+    console.log(`[ChatNotify] Watching ${batchSnap.docs.length} batches`);
     batchSnap.docs.forEach(attachBatchListener);
   }, (err) => console.error('[ChatNotify] batches onSnapshot error:', err.message));
 

@@ -6,9 +6,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
-  PanResponder, Dimensions, Vibration,
+  PanResponder, Dimensions, Vibration, ActivityIndicator
 } from 'react-native';
-import { Audio } from '../utils/expoAvMock';
+import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
 import { Logger } from '../utils/logger';
@@ -18,7 +18,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CANCEL_THRESHOLD = -100;
 
 interface Props {
-  onSend: (uri: string, duration: number) => void;
+  onSend: (uri: string, duration: number) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -27,6 +27,7 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slideX = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -34,7 +35,7 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
 
   // Pulse animation for recording indicator
   useEffect(() => {
-    if (!isPaused && recording) {
+    if (!isPaused && recording && !isSending) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.3, duration: 500, useNativeDriver: true }),
@@ -46,7 +47,7 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
     } else {
       pulseAnim.setValue(1);
     }
-  }, [isPaused, recording]);
+  }, [isPaused, recording, isSending]);
 
   // Start recording on mount
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
 
   // Timer
   useEffect(() => {
-    if (recording && !isPaused) {
+    if (recording && !isPaused && !isSending) {
       timerRef.current = setInterval(() => {
         setDuration(prev => prev + 1);
       }, 1000);
@@ -73,7 +74,7 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
         clearInterval(timerRef.current);
       }
     };
-  }, [recording, isPaused]);
+  }, [recording, isPaused, isSending]);
 
   const cleanup = () => {
     if (timerRef.current) {
@@ -108,7 +109,7 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
   };
 
   const handlePause = async () => {
-    if (!recording) return;
+    if (!recording || isSending) return;
     try {
       if (isPaused) {
         await recording.startAsync();
@@ -123,12 +124,14 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
   };
 
   const handleSend = async () => {
-    if (!recording) return;
+    if (!recording || isSending) return;
+    setIsSending(true);
     try {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       if (uri) {
-        onSend(uri, duration);
+        // Wait for onSend to finish uploading
+        await onSend(uri, duration);
       }
       setRecording(null);
       cleanup();
@@ -222,17 +225,21 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
       </Animated.View>
 
       {/* Pause/Resume */}
-      <TouchableOpacity style={styles.pauseButton} onPress={handlePause}>
+      <TouchableOpacity style={styles.pauseButton} onPress={handlePause} disabled={isSending}>
         <Ionicons
           name={isPaused ? 'play' : 'pause'}
           size={20}
-          color={COLORS.primary}
+          color={isSending ? COLORS.textTertiary : COLORS.primary}
         />
       </TouchableOpacity>
 
       {/* Send */}
-      <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-        <Ionicons name="send" size={20} color={COLORS.textInverse} />
+      <TouchableOpacity style={[styles.sendButton, isSending && styles.sendButtonDisabled]} onPress={handleSend} disabled={isSending}>
+        {isSending ? (
+          <ActivityIndicator size="small" color={COLORS.textInverse} />
+        ) : (
+          <Ionicons name="send" size={20} color={COLORS.textInverse} />
+        )}
       </TouchableOpacity>
     </Animated.View>
   );
@@ -305,5 +312,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: COLORS.textTertiary,
   },
 });

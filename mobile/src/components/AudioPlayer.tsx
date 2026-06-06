@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
 } from 'react-native';
-import { Audio } from '../utils/expoAvMock';
+import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';

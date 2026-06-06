@@ -9,7 +9,7 @@ import {
   ActivityIndicator, Dimensions, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from '../utils/expoAvMock';
+import { Video, ResizeMode } from 'expo-av';
 import { COLORS, SPACING, RADIUS, FONT_SIZE } from '../theme/theme';
 import { fileService } from '../services/fileService';
 import ImageViewerModal from './ImageViewerModal';

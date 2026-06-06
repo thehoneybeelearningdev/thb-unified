@@ -1399,6 +1399,42 @@ function startChatNotificationListeners() {
     batchSnap.docs.forEach(attachBatchListener);
   }, (err) => console.error('[ChatNotify] batches onSnapshot error:', err.message));
 
+  // Watch ALL general notifications
+  adminDb.collection('notifications').onSnapshot((notifSnap) => {
+    notifSnap.docChanges().forEach(async (change) => {
+      if (change.type !== 'added') return;
+      const notif = change.doc.data();
+
+      // Skip old notifications that existed before the server started
+      const msgTime = notif.createdAt?.toDate?.()?.getTime() || 0;
+      if (msgTime < serverStartTime) return;
+
+      const recipientId = notif.recipientId;
+      if (!recipientId) return;
+
+      try {
+        const userInfo = await resolveUserEmailAndRole(recipientId)
+          || { email: recipientId.includes('@') ? recipientId : null, role: 'student' };
+        
+        if (!userInfo?.email) {
+          console.log(`[GeneralNotify] Could not resolve user: ${recipientId}`);
+          return;
+        }
+
+        console.log(`[GeneralNotify] Sending push to ${userInfo.email} for: ${notif.title}`);
+
+        await sendPushToUser(
+          userInfo.email, userInfo.role,
+          notif.title || 'New Notification',
+          notif.message || 'You have a new notification',
+          { type: notif.type || 'general_notification', ...notif.batchDetails }
+        );
+      } catch (e) {
+        console.error(`[GeneralNotify] Error notifying user ${recipientId}:`, e.message);
+      }
+    });
+  }, (err) => console.error('[GeneralNotify] notifications onSnapshot error:', err.message));
+
   console.log('[ChatNotify] Listeners started.');
 }
 

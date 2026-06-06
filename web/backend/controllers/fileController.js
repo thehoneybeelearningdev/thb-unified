@@ -305,13 +305,13 @@ const getFileById = async (req, res) => {
     const file = files[0];
 
     // SECURITY: Check if user has permission to access this file metadata
-    const userEmail = req.user.email.toLowerCase();
+    const userEmail = (req.user.email || '').toLowerCase();
     const userRole = req.userRole;
 
     // Get user role if not already set
     if (!userRole) {
       const { getUserRoleAndName } = require('./authController');
-      const roleData = await getUserRoleAndName(userEmail, req.user.name);
+      const roleData = await getUserRoleAndName(userEmail, req.user.name || req.user.uid);
       req.userRole = roleData.role.toLowerCase();
     }
 
@@ -385,13 +385,13 @@ const downloadFile = async (req, res) => {
     const file = files[0];
 
     // SECURITY: Check if user has permission to access this file
-    const userEmail = req.user.email.toLowerCase();
+    const userEmail = (req.user.email || '').toLowerCase();
     const userRole = req.userRole;
 
     // Get user role if not already set
     if (!userRole) {
       const { getUserRoleAndName } = require('./authController');
-      const roleData = await getUserRoleAndName(userEmail, req.user.name);
+      const roleData = await getUserRoleAndName(userEmail, req.user.name || req.user.uid);
       req.userRole = roleData.role.toLowerCase();
     }
 
@@ -463,7 +463,7 @@ const updateFile = async (req, res) => {
     const file = files[0];
 
     // Check if user has permission to update this file
-    const userEmail = req.user.email.toLowerCase();
+    const userEmail = (req.user.email || '').toLowerCase();
     const userRole = req.userRole;
     
     if (userRole !== 'admin' && userRole !== 'teacher') {
@@ -535,7 +535,7 @@ const deleteFile = async (req, res) => {
     const file = files[0];
 
     // Check if user has permission to delete this file
-    const userEmail = req.user.email.toLowerCase();
+    const userEmail = (req.user.email || '').toLowerCase();
     const userRole = req.userRole;
     
     if (userRole !== 'admin' && userRole !== 'teacher') {

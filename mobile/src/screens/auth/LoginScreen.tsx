@@ -19,6 +19,7 @@ import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/goo
 // Configure Google Sign-In (web client ID is required for Firebase)
 GoogleSignin.configure({
   webClientId: '509238464463-tnvut4occp8r32nm8qg1koc7o7a7qgmg.apps.googleusercontent.com',
+  iosClientId: '509238464463-nchj49bns2p9sgrku2i91be9gbhnq7e3.apps.googleusercontent.com',
   offlineAccess: false,
 });
 

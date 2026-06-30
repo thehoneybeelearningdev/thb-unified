@@ -1270,6 +1270,76 @@ async function resolveUserEmailAndRole(userId) {
   return null;
 }
 
+async function resolveUserDetail(userId) {
+  // Try to find user across collections by UID field, document ID, or email
+  const collections = [
+    { name: 'Admin', role: 'admin' },
+    { name: 'Teacher', role: 'teacher' },
+    { name: 'Students', role: 'student' },
+  ];
+  for (const { name, role } of collections) {
+    try {
+      // 1. Try by uid field
+      let snap = await adminDb.collection(name).where('uid', '==', userId).limit(1).get();
+      if (!snap.empty) {
+        const d = snap.docs[0].data();
+        const email = (d.Gmail || d.email || '').toLowerCase();
+        const displayName = d.name || email.split('@')[0] || 'User';
+        return { email, role, name: displayName };
+      }
+      // 2. Try by document ID
+      const docSnap = await adminDb.collection(name).doc(userId).get();
+      if (docSnap.exists) {
+        const d = docSnap.data();
+        const email = (d.Gmail || d.email || '').toLowerCase();
+        const displayName = d.name || email.split('@')[0] || 'User';
+        return { email, role, name: displayName };
+      }
+      // 3. If userId looks like an email, try by Gmail/email field
+      if (userId.includes('@')) {
+        let emailSnap = await adminDb.collection(name).where('Gmail', '==', userId.toLowerCase()).limit(1).get();
+        if (!emailSnap.empty) {
+          const d = emailSnap.docs[0].data();
+          const displayName = d.name || userId.split('@')[0] || 'User';
+          return { email: userId.toLowerCase(), role, name: displayName };
+        }
+        let emailSnap2 = await adminDb.collection(name).where('email', '==', userId.toLowerCase()).limit(1).get();
+        if (!emailSnap2.empty) {
+          const d = emailSnap2.docs[0].data();
+          const displayName = d.name || userId.split('@')[0] || 'User';
+          return { email: userId.toLowerCase(), role, name: displayName };
+        }
+      }
+    } catch (e) {
+      console.error(`[resolveUserDetail] Error for ${userId} in ${name}:`, e.message);
+    }
+  }
+  return null;
+}
+
+async function sendPushToAdmins(senderId, senderName, title, body, data = {}) {
+  try {
+    const adminSnap = await adminDb.collection('Admin').get();
+    for (const adminDoc of adminSnap.docs) {
+      const adminData = adminDoc.data();
+      const adminEmail = (adminData.Gmail || adminData.email || '').toLowerCase();
+      const adminUid = adminData.uid || adminDoc.id;
+
+      // Skip notifying this admin if they sent the message
+      if (senderId && (senderId === adminUid || senderId === adminEmail)) {
+        continue;
+      }
+
+      if (adminEmail) {
+        console.log(`[ChatNotify] Notifying admin ${adminEmail} about message from ${senderName}`);
+        await sendPushToUser(adminEmail, 'admin', title, body, { ...data, isAdminNotification: true });
+      }
+    }
+  } catch (err) {
+    console.error('[ChatNotify] sendPushToAdmins error:', err.message);
+  }
+}
+
 const attachedChatListeners = new Set();
 const attachedBatchListeners = new Set();
 
@@ -1301,6 +1371,27 @@ function startChatNotificationListeners() {
           const users = Array.isArray(chatData.users) ? chatData.users : [];
 
           console.log(`[ChatNotify] New message in chat ${chatId} from ${msg.senderId}. Participants: ${users.join(', ')}`);
+
+          // Notify administrators about this message
+          try {
+            const senderInfo = await resolveUserDetail(msg.senderId) || { name: msg.senderName || 'Someone', role: msg.senderRole || 'user' };
+            const recipients = [];
+            for (const uId of users) {
+              if (uId !== msg.senderId) {
+                const uInfo = await resolveUserDetail(uId);
+                if (uInfo) recipients.push(uInfo);
+              }
+            }
+            const senderName = senderInfo.name;
+            const recipientNames = recipients.map(r => r.name).join(', ') || 'Someone';
+            const adminTitle = `💬 Chat: ${senderName} ➜ ${recipientNames}`;
+            const previewText = msg.text
+              || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
+
+            await sendPushToAdmins(msg.senderId, senderName, adminTitle, previewText, { chatId, type: 'private_message' });
+          } catch (adminErr) {
+            console.error('[ChatNotify] Admin private message notification error:', adminErr.message);
+          }
 
           for (const userId of users) {
             if (userId === msg.senderId || userId === 'admin') continue;
@@ -1358,6 +1449,20 @@ function startChatNotificationListeners() {
           }
 
           console.log(`[ChatNotify] New message in batch ${batchId} (${batchData.batchName}) from ${msg.senderId}. Recipients: ${allRecipients.length}`);
+
+          // Notify administrators about this batch message
+          try {
+            const senderInfo = await resolveUserDetail(msg.senderId) || { name: msg.senderName || 'Someone', role: msg.senderRole || 'user' };
+            const senderName = senderInfo.name;
+            const batchName = batchData.batchName || 'Batch';
+            const adminTitle = `👥 ${batchName}: ${senderName}`;
+            const previewText = msg.text
+              || (msg.messageType === 'voice' ? '🎤 Voice message' : '📎 Attachment');
+
+            await sendPushToAdmins(msg.senderId, senderName, adminTitle, previewText, { batchId, type: 'batch_message' });
+          } catch (adminErr) {
+            console.error('[ChatNotify] Admin batch message notification error:', adminErr.message);
+          }
 
           for (const recipientId of allRecipients) {
             if (recipientId === msg.senderId) continue;

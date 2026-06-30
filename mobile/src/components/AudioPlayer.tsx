@@ -27,8 +27,14 @@ export default function AudioPlayer({ fileUrl, duration = 0, isSent = false }: P
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  const player = useAudioPlayer(localUri || '');
+  const player = useAudioPlayer(localUri);
   const status = useAudioPlayerStatus(player);
+
+  useEffect(() => {
+    if (localUri) {
+      player.replace(localUri);
+    }
+  }, [localUri, player]);
 
   const isPlaying = status.playing;
   const position = status.currentTime * 1000;

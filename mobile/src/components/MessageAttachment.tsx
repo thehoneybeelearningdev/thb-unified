@@ -250,9 +250,14 @@ function VideoInlinePlayer({
   const [videoError, setVideoError] = useState(false);
   const { localUri, loading, error } = useAuthMedia(playing ? downloadUrl : undefined);
 
-  const player = useVideoPlayer(localUri || '', player => {
-    player.play();
-  });
+  const player = useVideoPlayer(localUri);
+
+  React.useEffect(() => {
+    if (localUri) {
+      player.replace(localUri);
+      player.play();
+    }
+  }, [localUri, player]);
 
   if (videoError || error) {
     return (
@@ -303,7 +308,6 @@ function VideoInlinePlayer({
       <VideoView
         style={videoStyles.player}
         player={player}
-        allowsFullscreen
         allowsPictureInPicture
         nativeControls
       />

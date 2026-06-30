@@ -2,27 +2,35 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>API_KEY</key>
-	<string>AIzaSyD70EtINOXX4eAOeQAlBPhQsPD8NKikodY</string>
 	<key>CLIENT_ID</key>
-	<string>509238464463-tnvut4occp8r32nm8qg1koc7o7a7qgmg.apps.googleusercontent.com</string>
+	<string>509238464463-nchj49bns2p9sgrku2i91be9gbhnq7e3.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.509238464463-tnvut4occp8r32nm8qg1koc7o7a7qgmg</string>
+	<string>com.googleusercontent.apps.509238464463-nchj49bns2p9sgrku2i91be9gbhnq7e3</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>509238464463-r20s6hcqinlhuvff32tfjkoob50f3idh.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyC0oO5ndypXhITiQTGSC9LyTsTWJ6PeDt0</string>
+	<key>GCM_SENDER_ID</key>
+	<string>509238464463</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.thehoneybee.learning</string>
 	<key>PROJECT_ID</key>
 	<string>chatapp-629ad</string>
 	<key>STORAGE_BUCKET</key>
 	<string>chatapp-629ad.firebasestorage.app</string>
-	<key>GOOGLE_APP_ID</key>
-	<string>1:509238464463:ios:2c1b34f74b8142dffdccba</string>
 	<key>IS_ADS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_APPINVITE_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_GCM_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_SIGNIN_ENABLED</key>
-	<true/>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:509238464463:ios:c05a192ec0ebb05bfdccba</string>
 </dict>
 </plist>

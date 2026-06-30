@@ -15,7 +15,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.thehoneybee.learning",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "2"
+      "buildNumber": "2",
+      "deploymentTarget": "16.0"
     },
     "android": {
       "newArchEnabled": false,
@@ -41,7 +42,11 @@
         }
       ],
       "@react-native-google-signin/google-signin",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio",
+      "expo-video",
+      "expo-font",
+      "expo-asset"
     ],
     "extra": {
       "eas": {

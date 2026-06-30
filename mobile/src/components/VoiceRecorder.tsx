@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
-  Dimensions, Vibration, ActivityIndicator
+  Dimensions, Vibration, ActivityIndicator, PanResponder
 } from 'react-native';
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,7 @@ import { Logger } from '../utils/logger';
 
 const TAG = 'VoiceRecorder';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CANCEL_THRESHOLD = -100;
 
 interface Props {
   onSend: (uri: string, duration: number) => Promise<void>;
@@ -27,6 +28,9 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
   
   const [isSending, setIsSending] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const slideX = useRef(new Animated.Value(0)).current;
+  const lockOpacity = useRef(new Animated.Value(1)).current;
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const isRecordingActive = state.isRecording;
   const isPaused = !state.isRecording && state.durationMillis > 0;
@@ -109,11 +113,8 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
   };
 
   const handleDelete = async () => {
-    if (!recording) return;
     try {
-      await recording.stopAndUnloadAsync();
-      setRecording(null);
-      cleanup();
+      await recorder.stop();
       onCancel();
     } catch (error) {
       Logger.error(TAG, 'Error deleting recording', error);
@@ -180,7 +181,7 @@ export default function VoiceRecorder({ onSend, onCancel }: Props) {
             isPaused && styles.recordingDotPaused,
           ]}
         />
-        <Text style={styles.timerText}>{formatTime(duration)}</Text>
+        <Text style={styles.timerText}>{formatTime(durationSec)}</Text>
       </View>
 
       {/* Slide to cancel hint */}

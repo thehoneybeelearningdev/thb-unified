@@ -15,6 +15,7 @@ import { COLORS, SPACING, RADIUS, FONT_SIZE, SHADOWS } from '../../theme/theme';
 import { auth } from '../../config/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 // Configure Google Sign-In (web client ID is required for Firebase)
 GoogleSignin.configure({
@@ -28,7 +29,7 @@ const { width } = Dimensions.get('window');
 type AuthMode = 'login' | 'register' | 'forgotPassword';
 
 export default function LoginScreen() {
-  const { loginWithEmail, registerWithEmail, loginWithGoogle, loading } = useAuth();
+  const { loginWithEmail, registerWithEmail, loginWithGoogle, loginWithApple, loading } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +53,37 @@ export default function LoginScreen() {
     } catch (error: any) {
       if (error.code !== 'SIGN_IN_CANCELLED') {
         Toast.show({ type: 'error', text1: 'Google Login failed', text2: error?.message || 'Please try again.' });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setSubmitting(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      
+      if (!credential.identityToken) {
+        throw new Error('No identity token returned from Apple Sign-In');
+      }
+
+      let rawName = null;
+      if (credential.fullName) {
+        const { givenName, familyName } = credential.fullName;
+        rawName = [givenName, familyName].filter(Boolean).join(' ').trim();
+      }
+
+      await loginWithApple(credential.identityToken, rawName || null);
+      Toast.show({ type: 'success', text1: 'Logged in with Apple!' });
+    } catch (error: any) {
+      if (error.code !== 'ERR_REQUEST_CANCELED') {
+        Toast.show({ type: 'error', text1: 'Apple Login failed', text2: error?.message || 'Please try again.' });
       }
     } finally {
       setSubmitting(false);
@@ -114,11 +146,27 @@ export default function LoginScreen() {
       return;
     }
     setSubmitting(true);
+    const lowerEmail = email.trim().toLowerCase();
     try {
-      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      // 1. Try to hit backend forgot-password endpoint first to ensure user exists in Firebase Auth
+      try {
+        await fetch(`${ENV.API_URL}/api/auth/forgot-password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: lowerEmail }),
+        });
+      } catch (backendError) {
+        console.warn('[handleForgotPassword] Backend prep failed (non-critical):', backendError);
+      }
+
+      // 2. Call Firebase Auth to send the reset email
+      await sendPasswordResetEmail(auth, lowerEmail);
       Toast.show({ type: 'success', text1: 'Reset link sent', text2: 'Check your inbox for the reset link.' });
       setMode('login');
-    } catch {
+    } catch (error) {
+      console.error('[handleForgotPassword] Firebase sendPasswordResetEmail failed:', error);
       // Always show success to prevent email enumeration
       Toast.show({ type: 'success', text1: 'Reset link sent', text2: 'If an account exists, a reset link has been sent.' });
       setMode('login');
@@ -286,6 +334,16 @@ export default function LoginScreen() {
                 <Ionicons name="logo-google" size={20} color={COLORS.text} style={styles.googleIcon} />
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </TouchableOpacity>
+
+              {Platform.OS === 'ios' && (
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={RADIUS.md}
+                  style={styles.appleButton}
+                  onPress={handleAppleLogin}
+                />
+              )}
             </>
           )}
 
@@ -452,5 +510,10 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  appleButton: {
+    width: '100%',
+    height: 48,
+    marginTop: SPACING.md,
   },
 });

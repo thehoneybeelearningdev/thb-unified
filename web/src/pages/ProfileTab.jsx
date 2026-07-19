@@ -304,7 +304,13 @@ const ProfileTab = () => {
       email: user.email // Add the user's email
   };
   try {
-    const profileRef = doc(db, collectionName, user.uid);
+    let resolvedDocId = user.uid;
+    if (roleLower === 'teacher' && myTeacherRef?.id) {
+      resolvedDocId = myTeacherRef.id;
+    } else if (roleLower === 'student' && myStudentDocId) {
+      resolvedDocId = myStudentDocId;
+    }
+    const profileRef = doc(db, collectionName, resolvedDocId);
     await setDoc(profileRef, dataToSave, { merge: true });
     toast.success("Profile updated successfully!");
     setIsEditMode(false);

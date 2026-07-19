@@ -73,8 +73,8 @@ export default function ChatAssignment() {
           
           for (const userId of userIds) {
             try {
-              // If it's a teacher ID (20 chars), try to get directly
-              if (userId.length === 20) {
+              // If it's a teacher ID (or not an email), try to get directly
+              if (userId && !userId.includes('@')) {
                 const teacherDoc = await getDoc(doc(db, collectionName, userId));
                 if (teacherDoc.exists()) {
                   teacherDocs.push({
@@ -203,8 +203,8 @@ export default function ChatAssignment() {
       // Function to get user data from Students/Teachers collections
       const getUserFromCollections = async (userId, email) => {
         try {
-          // First try to find in Teachers collection by ID (if length is 20)
-          if (userId.length === 20) {
+          // First try to find in Teachers collection by ID (if not an email)
+          if (userId && !userId.includes('@')) {
             const teacherDoc = await getDoc(doc(db, 'Teacher', userId));
             if (teacherDoc.exists()) {
               const teacherData = teacherDoc.data();
@@ -729,8 +729,8 @@ export default function ChatAssignment() {
               <select className="form-select" value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}>
                 <option value="">Choose a student...</option>
                 {(() => {
-                  // Only allow Firestore push IDs (length 20). Exclude uid-like long ids.
-                  const eligible = students.filter(s => String(s.id || '').length === 20)
+                  // Allow all students
+                  const eligible = students;
                   // De-duplicate by normalized email, then fall back to id
                   const normalize = s => String(s || '').toLowerCase().trim()
                   const byKey = new Map()
@@ -752,8 +752,8 @@ export default function ChatAssignment() {
               <select className="form-select" value={selectedTeacher} onChange={e=>setSelectedTeacher(e.target.value)}>
                 <option value="">Choose a teacher...</option>
                 {(() => {
-                  // Only allow Firestore push IDs (length 20). Exclude uid-like long ids.
-                  const eligible = teachers.filter(t => String(t.id || '').length === 20)
+                  // Allow all teachers
+                  const eligible = teachers;
                   // De-duplicate by normalized email, then fall back to id
                   const normalize = s => String(s || '').toLowerCase().trim()
                   const byKey = new Map()

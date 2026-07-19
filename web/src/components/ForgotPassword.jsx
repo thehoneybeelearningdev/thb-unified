@@ -57,7 +57,8 @@ const ForgotPassword = ({ onClose }) => {
         try {
           await sendPasswordResetEmail(auth, email);
         } catch (firebaseError) {
-          // Don't expose Firebase errors to user
+          // Don't expose Firebase errors to user, but log for debugging
+          console.error('[ForgotPassword] Firebase sendPasswordResetEmail failed:', firebaseError);
         }
       }
       
@@ -70,6 +71,7 @@ const ForgotPassword = ({ onClose }) => {
       
     } catch (err) {
       // Always show the same message even on error to prevent enumeration
+      console.error('[ForgotPassword] Backend forgot-password request failed:', err);
       setMessage({ 
         text: 'A reset link has been sent', 
         type: 'success' 

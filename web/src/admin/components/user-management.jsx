@@ -242,28 +242,28 @@ export default function UserManagement() {
           return
         }
 
-        // Create user in Firebase Authentication
-        const userCredential = await createUserWithEmailAndPassword(
-          auth, 
-          formData.email, 
-          formData.password
-        )
+        // Call the backend API to create student
+        const response = await fetch(`${API_BASE_URL}/api/students/add`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            name: formData.name,
+            phone: formData.phone,
+            status: formData.status,
+            joinDate: formData.joinDate
+          })
+        });
 
-        // Get the UID from the newly created user
-        const uid = userCredential.user.uid
+        const resData = await response.json();
 
-        // Store student details in Firestore
-        await addDoc(collection(db, "Students"), {
-          name: formData.name,
-          Gmail: formData.email,
-          email: formData.email,
-          phone: formData.phone,
-          status: formData.status,
-          role: "student",
-          uid: uid,
-          createdAt: serverTimestamp(),
-          joinDate: formData.joinDate
-        })
+        if (!response.ok) {
+          throw new Error(resData.error || 'Failed to add student');
+        }
 
         setFormSuccess("Student added successfully!")
         setTimeout(() => {
@@ -271,7 +271,7 @@ export default function UserManagement() {
         }, 2000)
       }
     } catch (err) {
-      if (err.code === 'auth/email-already-in-use') {
+      if (err.message && err.message.includes('already registered')) {
         setFormError("This email is already registered. Please use a different email.")
       } else {
         setFormError("Failed to process student: " + err.message)

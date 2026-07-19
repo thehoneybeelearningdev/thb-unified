@@ -10,11 +10,79 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { subscribeToUserNotifications, markNotificationAsRead, Notification } from '../../utils/notificationUtils';
 import { COLORS, SPACING, RADIUS, FONT_SIZE, SHADOWS } from '../../theme/theme';
+import { auth } from '../../config/firebase';
+import { ENV } from '../../config/env';
 
 export default function ProfileScreen({ navigation }: any) {
   const { user, userRole, userName, logout, loading } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action is permanent and will delete all your profile data and chat history.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Final Confirmation',
+              'This is your last chance. Do you really want to permanently delete your account?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Permanently Delete',
+                  style: 'destructive',
+                  onPress: executeDeleteAccount,
+                }
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const executeDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) throw new Error('No user currently logged in');
+
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch(`${ENV.API_URL}/api/auth/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete account from backend');
+      }
+
+      // Backend successfully deleted from Firestore and Auth
+      // Now delete locally on Firebase Client Auth (if possible) or just sign out
+      try {
+        await firebaseUser.delete();
+      } catch (err: any) {
+        // If it throws auth/requires-recent-login, it's fine because the backend already deleted it!
+        // We will just call logout() to clean up local client state
+        await logout();
+      }
+      
+      Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to delete your account. Please try signing out and signing in again, then retry.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!user?.email) return;
@@ -48,6 +116,15 @@ export default function ProfileScreen({ navigation }: any) {
     Teacher: '#3498db',
     Student: '#2ecc71',
   };
+
+  if (deleting) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ marginTop: 10, color: COLORS.textSecondary }}>Deleting your account...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -135,6 +212,17 @@ export default function ProfileScreen({ navigation }: any) {
               <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
             </View>
             <Text style={[styles.menuItemText, { color: COLORS.error }]}>Sign Out</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+        </TouchableOpacity>
+
+        {/* Delete Account */}
+        <TouchableOpacity style={styles.menuItem} onPress={handleDeleteAccount}>
+          <View style={styles.menuItemLeft}>
+            <View style={[styles.menuIcon, { backgroundColor: 'rgba(231, 76, 60, 0.1)' }]}>
+              <Ionicons name="trash-outline" size={20} color="#e74c3c" />
+            </View>
+            <Text style={[styles.menuItemText, { color: '#e74c3c' }]}>Delete Account</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
         </TouchableOpacity>

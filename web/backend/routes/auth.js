@@ -10,7 +10,7 @@ const { handleGoogleLogin, logout, getUserRoleAndName, handleEmailRegister, setT
 const verifySessionCookie = require('../middleware/authMiddleware');
 
 // Import Firebase Admin for user role and name lookup
-const { db } = require('../config/firebaseAdmin');
+const { db, auth: adminAuth } = require('../config/firebaseAdmin');
 
 // Create a router instance
 // A router is like a traffic director - it takes incoming requests and sends them to the right handler
@@ -48,6 +48,59 @@ router.post('/teachers/login', teacherLogin);
 
 // Forgot password endpoint
 router.post('/forgot-password', forgotPassword);
+
+// Delete account endpoint
+router.post('/delete-account', verifySessionCookie, async (req, res) => {
+  const email = req.user.email.toLowerCase();
+  const uid = req.user.uid;
+  console.log(`[DeleteAccount] Request to delete account: ${email} (uid: ${uid})`);
+
+  try {
+    // 1. Delete documents from collections where Gmail or email matches
+    const collections = ['Admin', 'Teacher', 'Students'];
+    for (const col of collections) {
+      let snap = await db.collection(col).where('Gmail', '==', email).get();
+      for (const doc of snap.docs) {
+        await doc.ref.delete();
+        console.log(`[DeleteAccount] Deleted ${col} document for ${email}`);
+      }
+      
+      let snap2 = await db.collection(col).where('email', '==', email).get();
+      for (const doc of snap2.docs) {
+        await doc.ref.delete();
+        console.log(`[DeleteAccount] Deleted ${col} document (by email field) for ${email}`);
+      }
+
+      if (uid) {
+        let snap3 = await db.collection(col).where('uid', '==', uid).get();
+        for (const doc of snap3.docs) {
+          await doc.ref.delete();
+          console.log(`[DeleteAccount] Deleted ${col} document (by uid field) for ${email}`);
+        }
+      }
+    }
+
+    // 2. Delete user from Firebase Auth
+    if (uid) {
+      await adminAuth.deleteUser(uid);
+      console.log(`[DeleteAccount] Deleted Auth user from Firebase: ${email}`);
+    }
+
+    // 3. Clear session cookie (for web compatibility)
+    res.clearCookie('session', {
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+      domain: ".thehoneybeelearning.in",
+    });
+
+    res.json({ success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error(`[DeleteAccount] Error deleting account for ${email}:`, error);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
 
 // Export the router so it can be used in our main server file
 // This connects our routes to the main Express application

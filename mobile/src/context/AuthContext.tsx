@@ -4,7 +4,7 @@
  * role determination from Firestore, and session management.
  */
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithCredential, OAuthProvider } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { Logger } from '../utils/logger';
@@ -34,6 +34,7 @@ interface AuthContextType {
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string, name: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  loginWithApple: (identityToken: string, rawName: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -255,6 +256,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [resolveRole]);
 
+  const loginWithApple = useCallback(async (identityToken: string, rawName: string | null) => {
+    Logger.info(TAG, 'Attempting Apple login via credential');
+    setLoading(true);
+    try {
+      const provider = new OAuthProvider('apple.com');
+      const credential = provider.credential({
+        idToken: identityToken,
+      });
+      const userCredential = await signInWithCredential(auth, credential);
+      
+      const displayName = rawName || userCredential.user.displayName || userCredential.user.email?.split('@')[0] || '';
+      
+      // Register with backend for session (using the google-login session handler, which accepts any Firebase ID token)
+      try {
+        const idToken = await userCredential.user.getIdToken();
+        await fetch(`${require('../config/env').ENV.API_URL}/api/auth/google-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, name: displayName }),
+        });
+      } catch (e) {
+        Logger.warn(TAG, 'Backend session creation failed for Apple', e);
+      }
+      
+      await resolveRole(userCredential.user);
+    } catch (error) {
+      Logger.error(TAG, 'Apple login error', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [resolveRole]);
+
 
   const logout = useCallback(async () => {
     Logger.info(TAG, 'Logging out');
@@ -288,6 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithEmail,
         registerWithEmail,
         loginWithGoogle,
+        loginWithApple,
       }}
     >
       {children}

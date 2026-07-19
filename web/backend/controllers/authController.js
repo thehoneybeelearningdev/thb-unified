@@ -299,16 +299,40 @@ const forgotPassword = async (req, res) => {
         // Use Firebase Admin to send reset email
         const { auth } = require("../config/firebaseAdmin");
 
+        // Check if user exists in Firebase Auth
+        let userExistsInAuth = true;
+        try {
+          await auth.getUserByEmail(lowerEmail);
+        } catch (authError) {
+          if (authError.code === 'auth/user-not-found') {
+            userExistsInAuth = false;
+          } else {
+            throw authError;
+          }
+        }
+
+        // If they don't exist in Auth, create them with a temporary/random password
+        if (!userExistsInAuth) {
+          const tempPassword = crypto.randomBytes(16).toString('hex');
+          await auth.createUser({
+            email: lowerEmail,
+            password: tempPassword,
+          });
+          console.log(`[ForgotPassword] Auto-created missing Firebase Auth user for ${lowerEmail}`);
+        }
+
         // Generate password reset link
         const actionCodeSettings = {
           url: `${process.env.CLIENT_URL}/login`,
           handleCodeInApp: true,
         };
 
-        // Send password reset email via Firebase
-        await auth.generatePasswordResetLink(lowerEmail, actionCodeSettings);
+        // Generate password reset link via Firebase
+        const resetLink = await auth.generatePasswordResetLink(lowerEmail, actionCodeSettings);
+        console.log(`[ForgotPassword] Generated reset link for ${lowerEmail}: ${resetLink}`);
       } catch (firebaseError) {
-        // Silent error handling - no console logs
+        // Log the error for debugging purposes
+        console.error(`[ForgotPassword] Error during password reset generation for ${lowerEmail}:`, firebaseError);
       }
     }
 

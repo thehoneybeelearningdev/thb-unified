@@ -160,8 +160,78 @@ const getStudentAnalytics = async (req, res) => {
     }
 };
 
+/**
+ * POST /api/students/add
+ * Safely adds a student by checking Firebase Auth and creating Firestore record if needed.
+ */
+const addStudent = async (req, res) => {
+    try {
+        const { email, password, name, phone, status, joinDate } = req.body;
+        if (!email || !name) {
+            return res.status(400).json({ error: 'Email and Name are required.' });
+        }
+        
+        const lowerEmail = email.trim().toLowerCase();
+        
+        // 1. Check if the student document already exists in Firestore Students collection
+        const studentSnap = await adminDb.collection('Students').where('Gmail', '==', lowerEmail).get();
+        if (!studentSnap.empty) {
+            return res.status(400).json({ error: 'Student already exists in Firestore database.' });
+        }
+
+        // 2. Check if the user exists in Firebase Authentication
+        let uid;
+        try {
+            const userRecord = await admin.auth().getUserByEmail(lowerEmail);
+            uid = userRecord.uid;
+            console.log(`[StudentController] User already exists in Firebase Auth with UID: ${uid}`);
+        } catch (authError) {
+            if (authError.code === 'auth/user-not-found') {
+                // User does not exist in Firebase Auth, create them
+                if (!password) {
+                    return res.status(400).json({ error: 'Password is required to create a new user.' });
+                }
+                const newUser = await admin.auth().createUser({
+                    email: lowerEmail,
+                    password: password,
+                    displayName: name,
+                });
+                uid = newUser.uid;
+                console.log(`[StudentController] Created new Firebase Auth user with UID: ${uid}`);
+            } else {
+                throw authError;
+            }
+        }
+
+        // 3. Create the Firestore student record
+        const newStudentDoc = await adminDb.collection('Students').add({
+            name,
+            Gmail: lowerEmail,
+            email: lowerEmail,
+            phone: phone || '',
+            status: status || 'active',
+            role: 'student',
+            uid: uid,
+            createdAt: FieldValue.serverTimestamp(),
+            joinDate: joinDate || new Date().toISOString().split('T')[0]
+        });
+
+        console.log(`[StudentController] Added Firestore student record with Doc ID: ${newStudentDoc.id}`);
+        res.json({
+            success: true,
+            studentId: newStudentDoc.id,
+            uid,
+            message: 'Student added successfully!'
+        });
+    } catch (error) {
+        console.error('[StudentController] Error adding student:', error);
+        res.status(500).json({ error: 'Failed to add student', message: error.message });
+    }
+};
+
 module.exports = {
     listStudents,
     updatePaymentStatus,
     getStudentAnalytics,
+    addStudent,
 };

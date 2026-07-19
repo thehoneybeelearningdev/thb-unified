@@ -16,7 +16,18 @@
       "bundleIdentifier": "com.thehoneybee.learning",
       "googleServicesFile": "./GoogleService-Info.plist",
       "buildNumber": "2",
-      "deploymentTarget": "16.0"
+      "deploymentTarget": "16.0",
+      "entitlements": {
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera so you can take photos of your school worksheets and homework assignments to send directly to your teacher.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone so you can record and send audio messages directly to your classmates and teachers.",
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos so you can select and upload homework assignments, worksheets, and profile pictures from your photo library.",
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save worksheets, class schedules, and study materials directly to your photo library."
+      }
     },
     "android": {
       "newArchEnabled": false,

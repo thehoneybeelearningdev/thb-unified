@@ -693,8 +693,8 @@ export default function BatchAssignment() {
                   >
                     <option value="">Choose a teacher...</option>
                     {(() => {
-                      // Only allow Firestore push IDs (length 20). Exclude uid-like long ids.
-                      const eligible = teachers.filter(t => String(t.id || '').length === 20)
+                      // Allow all teachers in the collection
+                      const eligible = teachers;
                       // De-duplicate by document ID
                       const uniqueTeachers = [];
                       const seenIds = new Set();
@@ -739,8 +739,8 @@ export default function BatchAssignment() {
                 ) : (
                   <div className="students-grid">
                     {(() => {
-                      // Only allow Firestore push IDs (length 20). Exclude uid-like long ids.
-                      const eligible = filteredStudents.filter(s => String(s.id || '').length === 20);
+                      // Allow all filtered students
+                      const eligible = filteredStudents;
                       // De-duplicate by normalized email, then fall back to id
                       const normalize = s => String(s || '').toLowerCase().trim();
                       const byKey = new Map();

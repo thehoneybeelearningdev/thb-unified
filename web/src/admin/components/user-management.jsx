@@ -242,12 +242,22 @@ export default function UserManagement() {
           return
         }
 
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+        if (auth.currentUser) {
+          try {
+            const idToken = await auth.currentUser.getIdToken();
+            headers['Authorization'] = `Bearer ${idToken}`;
+          } catch (e) {
+            // Ignore if unable to fetch idToken
+          }
+        }
+
         // Call the backend API to create student
         const response = await fetch(`${API_BASE_URL}/api/students/add`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           credentials: 'include',
           body: JSON.stringify({
             email: formData.email,

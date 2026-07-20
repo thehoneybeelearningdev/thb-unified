@@ -520,6 +520,12 @@ app.delete('/api/admin/delete-student/:studentId', async (req, res) => {
   }
 });
 
+// Add Student Endpoint
+const { addStudent } = require('./controllers/studentController');
+const { requireRole } = require('./middleware/roleMiddleware');
+app.post('/api/students/add', verifyAuth, requireRole(['admin']), addStudent);
+app.post('/api/admin/add-student', verifyAuth, requireRole(['admin']), addStudent);
+
 // ===================
 // Zoom automation (no frontend changes required)
 // ===================

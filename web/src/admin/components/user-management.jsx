@@ -242,38 +242,47 @@ export default function UserManagement() {
           return
         }
 
-        const headers = {
-          'Content-Type': 'application/json',
-        };
-        if (auth.currentUser) {
-          try {
-            const idToken = await auth.currentUser.getIdToken();
-            headers['Authorization'] = `Bearer ${idToken}`;
-          } catch (e) {
-            // Ignore if unable to fetch idToken
+        const lowerEmail = formData.email.trim().toLowerCase();
+        let uid = "";
+
+        try {
+          // 1. Try creating user in Firebase Authentication
+          const userCredential = await createUserWithEmailAndPassword(
+            auth, 
+            lowerEmail, 
+            formData.password
+          );
+          uid = userCredential.user.uid;
+        } catch (authErr) {
+          if (authErr.code === 'auth/email-already-in-use') {
+            // Check if student already exists in Firestore Students collection
+            const q1 = query(collection(db, "Students"), where("Gmail", "==", lowerEmail));
+            const q2 = query(collection(db, "Students"), where("email", "==", lowerEmail));
+            const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+
+            if (!snap1.empty || !snap2.empty) {
+              setFormError("This student is already in the database.");
+              setIsSubmitting(false);
+              return;
+            }
+            // User is in Auth but NOT in Firestore Students — proceed to create Firestore record!
+          } else {
+            throw authErr;
           }
         }
 
-        // Call the backend API to create student
-        const response = await fetch(`${API_BASE_URL}/api/students/add`, {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            name: formData.name,
-            phone: formData.phone,
-            status: formData.status,
-            joinDate: formData.joinDate
-          })
+        // 2. Store student details in Firestore
+        await addDoc(collection(db, "Students"), {
+          name: formData.name,
+          Gmail: lowerEmail,
+          email: lowerEmail,
+          phone: formData.phone || "",
+          status: formData.status || "active",
+          role: "student",
+          uid: uid,
+          createdAt: serverTimestamp(),
+          joinDate: formData.joinDate || new Date().toISOString().split('T')[0]
         });
-
-        const resData = await response.json();
-
-        if (!response.ok) {
-          throw new Error(resData.error || 'Failed to add student');
-        }
 
         setFormSuccess("Student added successfully!")
         setTimeout(() => {
@@ -281,11 +290,7 @@ export default function UserManagement() {
         }, 2000)
       }
     } catch (err) {
-      if (err.message && err.message.includes('already registered')) {
-        setFormError("This email is already registered. Please use a different email.")
-      } else {
-        setFormError("Failed to process student: " + err.message)
-      }
+      setFormError("Failed to process student: " + (err.message || err))
     } finally {
       setIsSubmitting(false)
     }

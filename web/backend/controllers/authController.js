@@ -321,14 +321,19 @@ const forgotPassword = async (req, res) => {
           console.log(`[ForgotPassword] Auto-created missing Firebase Auth user for ${lowerEmail}`);
         }
 
-        // Generate password reset link
-        const actionCodeSettings = {
-          url: `${process.env.CLIENT_URL}/login`,
-          handleCodeInApp: true,
-        };
+        // Clean CLIENT_URL (remove trailing slash) and ensure valid URL
+        const rawClientUrl = (process.env.CLIENT_URL || 'https://thehoneybeelearning.in').trim();
+        const baseUrl = rawClientUrl.replace(/\/+$/, '');
+        const redirectUrl = `${baseUrl}/login`;
 
         // Generate password reset link via Firebase
-        const resetLink = await auth.generatePasswordResetLink(lowerEmail, actionCodeSettings);
+        let resetLink;
+        try {
+          resetLink = await auth.generatePasswordResetLink(lowerEmail, { url: redirectUrl });
+        } catch (linkErr) {
+          // Fallback without actionCodeSettings if domain is not whitelisted
+          resetLink = await auth.generatePasswordResetLink(lowerEmail);
+        }
         console.log(`[ForgotPassword] Generated reset link for ${lowerEmail}: ${resetLink}`);
       } catch (firebaseError) {
         // Log the error for debugging purposes

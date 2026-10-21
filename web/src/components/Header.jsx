@@ -125,7 +125,7 @@ const Header = ({ onLoginClick }) => {         // Main Header component that rec
             <li className="nav-item"><NavLink className="nav-link fw-bold text-black" to="/about" onClick={collapseMobileNavbar}>About</NavLink></li>
             <li className="nav-item"><NavLink className="nav-link fw-bold text-black" to="/classes" onClick={collapseMobileNavbar}>Classes</NavLink></li>
             <li className="nav-item"><NavLink className="nav-link fw-bold text-black" to="/teachers" onClick={collapseMobileNavbar}>Teachers</NavLink></li>
-            <li className="nav-item"><NavLink className="nav-link fw-bold text-black" to="/product" onClick={collapseMobileNavbar}>Products</NavLink></li>
+            <li className="nav-item"><NavLink className="nav-link fw-bold text-black" to="/chat" onClick={collapseMobileNavbar}>Chat</NavLink></li>
             <li className="nav-item"><NavLink className="nav-link fw-bold text-black" to="/contact" onClick={collapseMobileNavbar}>Contact</NavLink></li>
 
           </ul>

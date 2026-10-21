@@ -69,7 +69,7 @@ const Footer = () => (
               <Link to="/about" className="d-block text-decoration-none text-white mt-2 px-4 position-relative">About Us</Link>
               <Link to="/classes" className="d-block text-decoration-none text-white mt-2 px-4 position-relative">Our Classes</Link>
               <Link to="/teachers" className="d-block text-decoration-none text-white mt-2 px-4 position-relative">Our Teachers</Link>
-              <Link to="/product" className="d-block text-decoration-none text-white mt-2 px-4 position-relative">Products</Link>
+              <Link to="/chat" className="d-block text-decoration-none text-white mt-2 px-4 position-relative">Chat</Link>
               <Link to="/contact" className="d-block text-decoration-none text-white mt-2 px-4 position-relative">Contact Us</Link>
             </div>
           </div>
